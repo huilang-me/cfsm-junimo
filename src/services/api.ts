@@ -474,6 +474,7 @@ export function mapConfigToPublic(data: Record<string, unknown>): PublicConfig {
   return {
     sitename: asString(data.site_title || document.title || "CF-Server-Monitor"),
     description: "CF-Server-Monitor theme.",
+    version: asString(data.version),
     theme: "cfsm-junimo",
     allow_cors: true,
     disable_password_login: false,

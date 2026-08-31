@@ -38,6 +38,7 @@ export function AppShell() {
   const isCheckingHomeData =
     canHydrateHome && !homeStoreStatus.hydrated && !homeStoreStatus.nodeInfoError;
   const isCheckingShell = isCheckingAccess || isCheckingHomeData;
+  const cfsmVersion = publicConfig.data?.version?.trim();
   return (
     <div className="relative flex min-h-screen flex-col">
       <BackgroundLayer />
@@ -56,6 +57,29 @@ export function AppShell() {
           )}
         </div>
       </main>
+      <footer className="app-footer px-3 sm:px-5 md:px-6 lg:px-8">
+        <span className="app-powered">
+          Powered by{" "}
+          <a
+            href="https://github.com/huilang-me/CF-Server-Monitor/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="app-powered-link"
+          >
+            CF-Server-Monitor{cfsmVersion ? ` ${cfsmVersion}` : ""}
+          </a>
+          <span className="app-powered-separator"> · </span>
+          theme by{" "}
+          <a
+            href="https://github.com/huilang-me/cfsm-junimo/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="app-powered-link"
+          >
+            Junimo
+          </a>
+        </span>
+      </footer>
     </div>
   );
 }

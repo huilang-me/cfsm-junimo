@@ -211,6 +211,7 @@ export const PublicConfigSchema = z
   .object({
     sitename: z.string().default(""),
     description: z.string().default(""),
+    version: z.string().default(""),
     theme: z.string().default(""),
     allow_cors: z.boolean().default(false),
     disable_password_login: z.boolean().default(false),

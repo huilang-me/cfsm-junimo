@@ -101,7 +101,8 @@ export const NodeCard = memo(function NodeCard({
     osName,
   } = model;
   const showConnections = themeSettings.isReady && themeSettings.showConnections;
-  const offlineDuration = isOffline ? formatOfflineDuration(offlineSince).full : null;
+  const offlineStat = isOffline ? formatOfflineDuration(offlineSince) : null;
+  const offlineDuration = offlineStat?.full ?? null;
   // 农场主题招牌漆色：只看主题设置的按节点指派，与 tag 颜色无关。
   const signColor = resolveFarmSignColorId(node, themeSettings.farmSignColors);
 
@@ -183,6 +184,7 @@ export const NodeCard = memo(function NodeCard({
           expire={expire}
           expireColor={expireColor}
           uptime={uptime}
+          offlineStat={offlineStat}
           footerTags={footerTags}
           renewalPrice={renewalPrice}
         />
@@ -592,12 +594,14 @@ function NodeCardFooter({
   expire,
   expireColor,
   uptime,
+  offlineStat,
   footerTags,
   renewalPrice,
 }: {
   expire: DisplayStat;
   expireColor: string;
   uptime: DisplayStat;
+  offlineStat: DisplayStat | null;
   footerTags: DisplayTag[];
   renewalPrice: string | null;
 }) {
@@ -669,11 +673,11 @@ function NodeCardFooter({
     <div className="server-card-footer">
       <div className="server-card-meta-grid">
         <FooterStat
-          icon={<RefreshCw size={13} strokeWidth={2} />}
-          label="在线"
-          value={uptime.value}
-          unit={uptime.unit}
-          color="var(--progress-cpu)"
+          icon={offlineStat ? <Unplug size={13} strokeWidth={2} /> : <RefreshCw size={13} strokeWidth={2} />}
+          label={offlineStat ? "离线" : "在线"}
+          value={offlineStat?.value ?? uptime.value}
+          unit={offlineStat?.unit ?? uptime.unit}
+          color={offlineStat ? "var(--status-offline)" : "var(--progress-cpu)"}
         />
         <FooterStat
           icon={<Calendar size={13} strokeWidth={2} />}

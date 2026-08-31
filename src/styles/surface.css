@@ -153,6 +153,37 @@ body::after {
   padding-top: calc(env(safe-area-inset-top, 0px) + 1.25rem);
 }
 
+.app-footer {
+  --app-gutter: 0.75rem;
+  padding-left: max(var(--app-gutter), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--app-gutter), env(safe-area-inset-right, 0px));
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
+  text-align: center;
+}
+
+.app-powered {
+  display: inline;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 560;
+  line-height: 1.5;
+}
+
+.app-powered-link {
+  color: inherit;
+  transition: color 160ms ease;
+}
+
+.app-powered-link:hover {
+  color: var(--text-secondary);
+}
+
+.app-powered-separator {
+  color: color-mix(in srgb, var(--text-tertiary) 60%, transparent);
+}
+
 .floating-controls {
   position: absolute;
   top: -14px;
