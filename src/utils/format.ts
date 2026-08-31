@@ -213,7 +213,7 @@ function inferPlainTagColor(label: string): string {
 export function parseTags(raw: string | undefined | null): Array<{ label: string; color: string }> {
   if (!raw) return [];
   return raw
-    .split(";")
+    .split(/[\n,，;；]+/)
     .map((s) => s.trim())
     .filter(Boolean)
     .map((item) => {

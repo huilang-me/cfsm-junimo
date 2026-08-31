@@ -36,7 +36,7 @@ export function resolvePingSampleCounts(
   const reportedLoss = sample.loss;
   const lost =
     typeof reportedLoss === "number" && Number.isFinite(reportedLoss)
-      ? Math.min(total, Math.max(0, Math.round((reportedLoss / 100) * total)))
+      ? Math.min(total, Math.max(0, (reportedLoss / 100) * total))
       : sample.value < 0
         ? total
         : 0;

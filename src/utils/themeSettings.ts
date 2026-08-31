@@ -109,11 +109,11 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   desktopNodeViewMode: "large",
   mobileNodeViewMode: "compact",
   enableAdminButton: true,
-  showPingChart: false,
+  showPingChart: true,
   homepagePingBindings: {},
-  enableHomepageMultiPing: false,
-  homepageMultiPingTaskIds: [],
-  homepageMultiPingGroups: [],
+  enableHomepageMultiPing: true,
+  homepageMultiPingTaskIds: [1, 2, 3],
+  homepageMultiPingGroups: [{ taskIds: [1, 2, 3], clientUuids: [] }],
   fakePingForUnbound: false,
   showHomeOverview: true,
   homeOverviewDensity: "auto",
@@ -211,13 +211,19 @@ function normalizeHomeSortDefault(
 export function normalizeThemeSettings(
   settings: (ThemeSettings & Record<string, unknown>) | null | undefined,
 ): ResolvedThemeSettings {
-  const homepageMultiPingTaskIds = normalizeHomepageMultiPingTaskIds(
+  const normalizedHomepageMultiPingTaskIds = normalizeHomepageMultiPingTaskIds(
     settings?.homepageMultiPingTaskIds,
   );
-  const homepageMultiPingGroups = normalizeHomepageMultiPingGroups(
+  const homepageMultiPingTaskIds = normalizedHomepageMultiPingTaskIds.length > 0
+    ? normalizedHomepageMultiPingTaskIds
+    : DEFAULT_THEME_SETTINGS.homepageMultiPingTaskIds;
+  const normalizedHomepageMultiPingGroups = normalizeHomepageMultiPingGroups(
     settings?.homepageMultiPingGroups,
-    settings?.homepageMultiPingTaskIds,
+    homepageMultiPingTaskIds,
   );
+  const homepageMultiPingGroups = normalizedHomepageMultiPingGroups.length > 0
+    ? normalizedHomepageMultiPingGroups
+    : DEFAULT_THEME_SETTINGS.homepageMultiPingGroups;
   return {
     defaultAppearance: normalizeAppearance(settings?.defaultAppearance),
     desktopNodeViewMode: normalizeNodeViewMode(
@@ -231,8 +237,7 @@ export function normalizeThemeSettings(
     enableAdminButton: enabledUnlessFalse(settings?.enableAdminButton),
     showPingChart: enabledUnlessFalse(settings?.showPingChart),
     homepagePingBindings: normalizeHomepagePingTaskBindings(settings?.homepagePingBindings),
-    // 保留开关原值，让管理页能呈现并修复不完整配置；首页消费方仅在任务恰好为三项时启用。
-    enableHomepageMultiPing: settings?.enableHomepageMultiPing === true,
+    enableHomepageMultiPing: enabledUnlessFalse(settings?.enableHomepageMultiPing),
     homepageMultiPingTaskIds,
     homepageMultiPingGroups,
     // 默认关闭(需手动开启):给访客展示的是模拟数据,必须由站长显式决定。

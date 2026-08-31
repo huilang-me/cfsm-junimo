@@ -30,8 +30,10 @@ import { resolveOsInfo } from "@/components/ui/OsLogo";
 import {
   hasHomepagePingTaskBinding,
   hasUsableHomepageMultiPingGroups,
+  HOMEPAGE_MULTI_PING_TASK_COUNT,
   resolveHomepagePingTaskIdsByGroups,
 } from "@/utils/pingTasks";
+import { getCfsmProbeName } from "@/utils/cfsmProbeMetrics";
 
 interface NodeCardModelOptions {
   pingBucketCount?: number;
@@ -64,7 +66,8 @@ export function useNodeCardModel(
   const multiPingActive =
     includeMultiPing &&
     enableHomepageMultiPing &&
-    hasUsableHomepageMultiPingGroups(homepageMultiPingGroups);
+    (homepageMultiPingTaskIds.length === HOMEPAGE_MULTI_PING_TASK_COUNT ||
+      hasUsableHomepageMultiPingGroups(homepageMultiPingGroups));
   const realPing = useNodePingOverview(uuid, !multiPingActive);
   const realPingLines = useNodePingOverviewLines(uuid, multiPingActive);
   const hasRealHomepagePingBinding = useMemo(
@@ -113,7 +116,7 @@ export function useNodeCardModel(
       const line: HomepagePingLine =
         loaded ?? {
           taskId,
-          taskName: `任务 #${taskId}`,
+          taskName: getCfsmProbeName(taskId),
           client: uuid,
           isAssigned: true,
           loadState: "pending",

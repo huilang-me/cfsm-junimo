@@ -18,6 +18,7 @@ import type {
   PingTaskStats,
 } from "@/types/cfsm";
 import { withTimeoutSignal } from "@/utils/abort";
+import { getCfsmProbeName } from "@/utils/cfsmProbeMetrics";
 import { resolvePingSampleCounts } from "@/utils/pingMetrics";
 import {
   hasUsableHomepageMultiPingGroups,
@@ -153,6 +154,9 @@ function equalPingItem(a: PingOverviewItem | undefined, b: PingOverviewItem | un
     a.loadState === b.loadState &&
     a.lastValue === b.lastValue &&
     a.metricIntervalMs === b.metricIntervalMs &&
+    a.windowMs === b.windowMs &&
+    a.rangeEndMs === b.rangeEndMs &&
+    a.pointCount === b.pointCount &&
     a.max === b.max &&
     a.loss === b.loss &&
     equalSamples(a.samples, b.samples)
@@ -172,6 +176,9 @@ export function buildPingOverviewItems(
   records: PingRecord[],
   metricStats: PingTaskStats[] = [],
   metricIntervalSeconds?: number,
+  metricWindowMs?: number,
+  metricRangeEndMs?: number,
+  metricPointCount?: number,
 ) {
   const metricIntervalMs =
     typeof metricIntervalSeconds === "number" &&
@@ -239,6 +246,15 @@ export function buildPingOverviewItems(
         serverStats?.latest ??
         (latestRecord && latestRecord.value >= 0 ? latestRecord.value : null),
       metricIntervalMs,
+      ...(typeof metricWindowMs === "number" && Number.isFinite(metricWindowMs) && metricWindowMs > 0
+        ? { windowMs: metricWindowMs }
+        : {}),
+      ...(typeof metricRangeEndMs === "number" && Number.isFinite(metricRangeEndMs) && metricRangeEndMs > 0
+        ? { rangeEndMs: metricRangeEndMs }
+        : {}),
+      ...(typeof metricPointCount === "number" && Number.isFinite(metricPointCount) && metricPointCount > 0
+        ? { pointCount: metricPointCount }
+        : {}),
       samples,
       max: serverStats?.max ?? max,
       loss:
@@ -333,7 +349,7 @@ function assignedEmptyPing(
 function assignedEmptyLine(
   client: string,
   taskId: number,
-  taskName = `任务 #${taskId}`,
+  taskName = getCfsmProbeName(taskId),
   loadState: PingOverviewTaskLoadState = "pending",
 ): HomepagePingLine {
   return {
@@ -515,7 +531,7 @@ export async function buildPingOverviewMap(
     const next = successfulTaskIds.has(taskId)
       ? {
           taskId,
-          taskName: taskNames.get(taskId) ?? current.taskName ?? `任务 #${taskId}`,
+          taskName: taskNames.get(taskId) ?? current.taskName ?? getCfsmProbeName(taskId),
           ...(itemsByTask.get(taskId)?.get(uuid) ?? assignedEmptyPing(uuid, "ready")),
           loadState: "ready" as const,
         }
@@ -565,7 +581,7 @@ export async function buildPingOverviewMap(
     const {
       taskId,
       entityIds,
-      overview: { records, tasks, stats, intervalSeconds },
+      overview: { records, tasks, stats, intervalSeconds, windowMs, rangeEndMs, pointCount },
     } = loaded;
     const effectiveStats = mergePingOverviewStats(
       taskId,
@@ -579,7 +595,7 @@ export async function buildPingOverviewMap(
     if (taskName) taskNames.set(taskId, taskName);
     itemsByTask.set(
       taskId,
-      buildPingOverviewItems(taskId, records, effectiveStats, intervalSeconds),
+      buildPingOverviewItems(taskId, records, effectiveStats, intervalSeconds, windowMs, rangeEndMs, pointCount),
     );
 
     const taskInterval =
@@ -677,6 +693,7 @@ let scheduledBindings: HomepagePingTaskBindings = {};
 let scheduledMultiTaskIds: number[] = [];
 let scheduledMultiPingGroups: HomepageMultiPingGroup[] = [];
 let scheduledSelectionKey = `${stringifyBindings({})}|multi:`;
+let completedPingOverviewSelectionKey = "";
 let pingRefreshInFlight = false;
 let pingRefreshTimer: number | null = null;
 let pingAbortController: AbortController | null = null;
@@ -749,11 +766,26 @@ function parseCachedPingItem(value: unknown): PingOverviewItem | null {
     isAssigned: true,
     loadState: "ready",
     lastValue,
-    ...(typeof value.metricIntervalMs === "number" &&
+      ...(typeof value.metricIntervalMs === "number" &&
     Number.isFinite(value.metricIntervalMs) &&
     value.metricIntervalMs > 0
-      ? { metricIntervalMs: value.metricIntervalMs }
-      : {}),
+        ? { metricIntervalMs: value.metricIntervalMs }
+        : {}),
+      ...(typeof value.windowMs === "number" &&
+      Number.isFinite(value.windowMs) &&
+      value.windowMs > 0
+        ? { windowMs: value.windowMs }
+        : {}),
+      ...(typeof value.rangeEndMs === "number" &&
+      Number.isFinite(value.rangeEndMs) &&
+      value.rangeEndMs > 0
+        ? { rangeEndMs: value.rangeEndMs }
+        : {}),
+      ...(typeof value.pointCount === "number" &&
+      Number.isFinite(value.pointCount) &&
+      value.pointCount > 0
+        ? { pointCount: value.pointCount }
+        : {}),
     samples: samples as PingOverviewItem["samples"],
     max:
       typeof value.max === "number" && Number.isFinite(value.max) && value.max >= 0
@@ -773,7 +805,7 @@ function readPingOverviewCache(
     const parsed = JSON.parse(raw) as unknown;
     if (!isRecord(parsed)) return null;
     if (
-      parsed.version !== 1 ||
+      parsed.version !== 2 ||
       parsed.assignmentKey !== assignmentKey ||
       typeof parsed.savedAt !== "number" ||
       !Number.isFinite(parsed.savedAt) ||
@@ -872,20 +904,6 @@ function persistPingOverviewCache(result: PingOverviewMapResult) {
   } catch {
     // 隐私模式或存储配额不足时继续使用内存数据。
   }
-}
-
-function schedulePingRefresh(intervalMs: number) {
-  if (pingRefreshTimer != null) {
-    window.clearTimeout(pingRefreshTimer);
-    pingRefreshTimer = null;
-  }
-  // 没有组件消费 overview 时就停止轮询。等有消费者再次挂载时，
-  // 由 ensurePingOverviewStarted 重新启动整条链路。
-  if (pingPollingDisposed || activeConsumers <= 0) return;
-  pingRefreshTimer = window.setTimeout(() => {
-    pingRefreshTimer = null;
-    void refreshPingOverview();
-  }, intervalMs);
 }
 
 function stopPingPolling() {
@@ -1097,11 +1115,7 @@ async function refreshPingOverview() {
         },
       );
       persistPingOverviewCache(next);
-      schedulePingRefresh(
-        next.successfulTaskIds.length > 0
-          ? next.intervalMs
-          : DEFAULT_PING_REFRESH_INTERVAL,
-      );
+      completedPingOverviewSelectionKey = selectionKey;
     }
   } catch {
     if (isCurrent()) {
@@ -1109,22 +1123,10 @@ async function refreshPingOverview() {
         hasCachedOverview ? "ready" : "error",
         false,
       );
-      schedulePingRefresh(DEFAULT_PING_REFRESH_INTERVAL);
     }
   } finally {
     pingRefreshInFlight = false;
     if (pingAbortController === controller) pingAbortController = null;
-    // 只要消费者还想轮询但队列里没有任务，就恢复轮询。这覆盖了执行中途 assignment
-    // 变化（上面那次跑会跳过 commit）以及 abort/重新挂载竞态（如 StrictMode:
-    // mount→stop(abort)→mount），后者里被 abort 的那次不能负责重新调度。成功或失败
-    // 的一次已经设过 timer，所以稳态下这里是 no-op。
-    if (
-      activeConsumers > 0 &&
-      scheduledVisibleUuids.length > 0 &&
-      pingRefreshTimer == null
-    ) {
-      void refreshPingOverview();
-    }
   }
 }
 
@@ -1148,6 +1150,7 @@ function ensurePingOverviewStarted(
     scheduledMultiTaskIds = multiTaskIds;
     scheduledMultiPingGroups = multiGroups;
     scheduledSelectionKey = selectionKey;
+    completedPingOverviewSelectionKey = "";
 
     pingAbortController?.abort();
 
@@ -1176,10 +1179,10 @@ function ensurePingOverviewStarted(
     return;
   }
 
-  // 只要没有待处理请求、也没有已调度的 tick 就重启——这同时覆盖首次挂载
-  // 和轮询被停止后的恢复。
+  // 首页三网使用 /api/servers 快照；同一分配加载完成后不再轮询刷新。
   if (
     normalizedVisibleUuids.length > 0 &&
+    completedPingOverviewSelectionKey !== selectionKey &&
     !pingRefreshInFlight &&
     pingRefreshTimer == null
   ) {
@@ -1316,12 +1319,15 @@ export function useNodePingOverviewLines(
 }
 
 export function buildPingBuckets(
-  ping: Pick<PingOverviewItem, "samples" | "metricIntervalMs">,
+  ping: Pick<PingOverviewItem, "samples" | "metricIntervalMs" | "windowMs" | "rangeEndMs" | "pointCount">,
   count?: number,
   now = Date.now(),
 ): PingOverviewBucket[] {
-  const totalWindowMs = 60 * 60 * 1000;
-  const requestedCount = count ?? MAX_VISIBLE_HOMEPAGE_PING_BUCKETS;
+  const totalWindowMs =
+    typeof ping.windowMs === "number" && Number.isFinite(ping.windowMs) && ping.windowMs > 0
+      ? ping.windowMs
+      : 60 * 60 * 1000;
+  const requestedCount = ping.pointCount ?? count ?? MAX_VISIBLE_HOMEPAGE_PING_BUCKETS;
   const boundedRequestedCount =
     Number.isFinite(requestedCount) && requestedCount > 0
       ? Math.min(240, Math.max(1, Math.round(requestedCount)))
@@ -1334,7 +1340,11 @@ export function buildPingBuckets(
       : 0;
   const resolvedCount = boundedRequestedCount;
   const bucketMs = totalWindowMs / resolvedCount;
-  const windowStart = now - totalWindowMs;
+  const windowEnd =
+    typeof ping.rangeEndMs === "number" && Number.isFinite(ping.rangeEndMs) && ping.rangeEndMs > 0
+      ? ping.rangeEndMs
+      : now;
+  const windowStart = windowEnd - totalWindowMs;
   const totals = new Array<number>(resolvedCount).fill(0);
   const losts = new Array<number>(resolvedCount).fill(0);
   const positiveSums = new Array<number>(resolvedCount).fill(0);
@@ -1360,7 +1370,7 @@ export function buildPingBuckets(
   for (const sample of ping.samples ?? []) {
     if (metricIntervalMs > bucketMs) {
       const sampleEnd = sample.time + metricIntervalMs;
-      if (sampleEnd <= windowStart || sample.time > now) continue;
+      if (sampleEnd <= windowStart || sample.time > windowEnd) continue;
 
       // 后端时间戳是聚合桶起点。以每个可视 bucket 的中点判断它属于哪个
       // 聚合区间，相当于对粗粒度数据做 sample-and-hold：不会制造规律性空洞，
@@ -1379,10 +1389,10 @@ export function buildPingBuckets(
       const sampleEnd = sample.time + metricIntervalMs;
       if (sampleEnd <= windowStart || sample.time > now) continue;
       const overlapStart = Math.max(sample.time, windowStart);
-      const overlapEnd = Math.min(sampleEnd, now);
+      const overlapEnd = Math.min(sampleEnd, windowEnd);
       if (overlapEnd < overlapStart) continue;
       sampleTime = overlapStart + (overlapEnd - overlapStart) / 2;
-    } else if (sample.time < windowStart || sample.time > now) {
+    } else if (sample.time < windowStart || sample.time > windowEnd) {
       continue;
     }
 
@@ -1396,7 +1406,7 @@ export function buildPingBuckets(
     const startAt = windowStart + index * bucketMs;
     const endAt = startAt + bucketMs;
     const total = totals[index];
-    const lost = Math.round(losts[index]);
+    const lost = losts[index];
     const positiveCount = positiveCounts[index];
 
     return {
@@ -1412,20 +1422,20 @@ export function buildPingBuckets(
 }
 
 export function usePingBuckets(
-  ping: Pick<PingOverviewItem, "samples" | "metricIntervalMs">,
+  ping: Pick<PingOverviewItem, "samples" | "metricIntervalMs" | "windowMs" | "rangeEndMs" | "pointCount">,
   count?: number,
   enabled = true,
 ): PingOverviewBucket[] {
-  const { samples, metricIntervalMs } = ping;
+  const { samples, metricIntervalMs, windowMs, rangeEndMs, pointCount } = ping;
   // 轮询返回同引用数据时窗口也要随时间前移,否则时间轴最多滞后约 2 个桶;分钟粒度足够
   // (桶宽 ≥150s),也避免每个 ws tick 都重算。
   const now = useMinuteClock(enabled);
   return useMemo(
     () =>
       enabled
-        ? buildPingBuckets({ samples, metricIntervalMs }, count, now)
+        ? buildPingBuckets({ samples, metricIntervalMs, windowMs, rangeEndMs, pointCount }, count, now)
         : EMPTY_PING_BUCKETS,
-    [count, enabled, metricIntervalMs, now, samples],
+    [count, enabled, metricIntervalMs, now, pointCount, rangeEndMs, samples, windowMs],
   );
 }
 

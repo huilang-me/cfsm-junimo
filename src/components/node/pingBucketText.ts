@@ -31,7 +31,10 @@ function formatLossBucketSummary(
 ) {
   if (!bucket) return "—";
   if (bucket.total <= 0 || bucket.loss == null) return "无样本";
-  return `${trimFixed(bucket.loss, 1)}%${separator}${bucket.lost}/${bucket.total}`;
+  const lostLabel = Number.isInteger(bucket.lost)
+    ? String(bucket.lost)
+    : trimFixed(bucket.lost, 2);
+  return `${trimFixed(bucket.loss, 1)}%${separator}${lostLabel}/${bucket.total}`;
 }
 
 export function formatHealthBucketTooltip(

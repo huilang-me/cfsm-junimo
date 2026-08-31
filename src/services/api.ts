@@ -9,10 +9,19 @@
   PingTaskStats,
   PublicConfig,
 } from "@/types/cfsm";
+import {
+  CFSM_PROBE_DEFS,
+  HOMEPAGE_CFSM_PROBE_DEFS,
+  clampLossPercent,
+  parseProbeMetricValue,
+} from "@/utils/cfsmProbeMetrics";
 
 const DEFAULT_API_TIMEOUT_MS = 12_000;
 const ONLINE_THRESHOLD_MS = 5 * 60 * 1000;
 const TURNSTILE_VERIFIED_KEY = "turnstile_verified";
+const HOMEPAGE_LATENCY_WINDOW_POINTS = 20;
+const HOMEPAGE_LATENCY_WINDOW_HOURS = 2;
+const HOMEPAGE_PING_SNAPSHOT_CACHE_MS = 1_000;
 const baseIndexByUuid = new Map<string, number>();
 
 interface ApiCallOptions {
@@ -36,6 +45,27 @@ interface CfsmFetchResult<T> {
   baseUrl: string;
   baseIndex: number;
 }
+
+interface HomepageLatencyWindowConfig {
+  points: number;
+  hours: number;
+}
+
+interface HomepagePingSnapshot extends PingRecordsResponse {
+  windowConfig: HomepageLatencyWindowConfig;
+}
+
+interface ServersPayload {
+  servers?: unknown[];
+  latestMetricsMap?: unknown;
+  sysConfig?: unknown;
+}
+
+let homepagePingSnapshotCache: {
+  key: string;
+  savedAt: number;
+  promise: Promise<HomepagePingSnapshot>;
+} | null = null;
 
 export class ApiRequestError extends Error {
   constructor(
@@ -208,6 +238,10 @@ function asBool(value: unknown) {
   return false;
 }
 
+function hasOwn(source: Record<string, unknown>, key: string) {
+  return Object.prototype.hasOwnProperty.call(source, key);
+}
+
 function normalizeTimestamp(value: unknown) {
   const number = asNumber(value);
   if (number > 0) return number > 1_000_000_000_000 ? number : number * 1000;
@@ -221,6 +255,38 @@ function parseLoadValues(value: unknown): [number, number, number] {
   }
   const parts = asString(value).trim().split(/\s+/);
   return [asNumber(parts[0]), asNumber(parts[1]), asNumber(parts[2])];
+}
+
+function normalizeProbeField(payload: Record<string, unknown>, key: string) {
+  return hasOwn(payload, key) ? parseProbeMetricValue(payload[key]) : null;
+}
+
+function normalizeLatencyWindowConfig(value: unknown): HomepageLatencyWindowConfig {
+  const record = asRecord(value);
+  const rawPoints = asNumber(record.points, HOMEPAGE_LATENCY_WINDOW_POINTS);
+  const rawHours = asNumber(record.hours, HOMEPAGE_LATENCY_WINDOW_HOURS);
+  const points = Number.isInteger(rawPoints) && rawPoints > 0
+    ? Math.min(240, rawPoints)
+    : HOMEPAGE_LATENCY_WINDOW_POINTS;
+  const hours = Number.isFinite(rawHours) && rawHours > 0
+    ? Math.min(168, rawHours)
+    : HOMEPAGE_LATENCY_WINDOW_HOURS;
+  return { points, hours };
+}
+
+function getLatencyWindowFromConfig(config: Record<string, unknown>) {
+  return normalizeLatencyWindowConfig(
+    config.latency_window ?? asRecord(config.sysConfig).latency_window,
+  );
+}
+
+function extractServersFromPayload(data: ServersPayload | Record<string, unknown>) {
+  const payload = asRecord(data);
+  if (Array.isArray(payload.servers)) return payload.servers;
+  return Object.entries(asRecord(payload.latestMetricsMap)).map(([id, metrics]) => ({
+    id,
+    ...asRecord(metrics),
+  }));
 }
 
 function parseTrafficLimit(value: unknown) {
@@ -323,7 +389,7 @@ function rememberServerBase(uuid: string, baseIndex: number) {
 
 function mapHistoryRow(row: unknown, uuid: string): LoadRecord {
   const record = asRecord(row);
-  const [load1] = parseLoadValues(record.load_avg ?? record.load);
+  const [load1, load5, load15] = parseLoadValues(record.load_avg ?? record.load);
   return {
     cpu: asNumber(record.cpu),
     gpu: 0,
@@ -332,6 +398,8 @@ function mapHistoryRow(row: unknown, uuid: string): LoadRecord {
     swap: asNumber(record.swap_used) * 1024 * 1024,
     swap_total: asNumber(record.swap_total) * 1024 * 1024,
     load: load1,
+    load5,
+    load15,
     temp: 0,
     disk: asNumber(record.disk_used) * 1024 * 1024,
     disk_total: asNumber(record.disk_total) * 1024 * 1024,
@@ -342,6 +410,13 @@ function mapHistoryRow(row: unknown, uuid: string): LoadRecord {
     process: asNumber(record.processes),
     connections: asNumber(record.tcp_conn),
     connections_udp: asNumber(record.udp_conn),
+    gpu_info: record.gpu_info,
+    disk_read_bps: asNumber(record.disk_read_bps),
+    disk_write_bps: asNumber(record.disk_write_bps),
+    disk_read_iops: asNumber(record.disk_read_iops),
+    disk_write_iops: asNumber(record.disk_write_iops),
+    disk_await_ms: asNumber(record.disk_await_ms),
+    disk_util: asNumber(record.disk_util),
     time: normalizeTimestamp(record.timestamp),
     client: uuid,
   };
@@ -349,14 +424,30 @@ function mapHistoryRow(row: unknown, uuid: string): LoadRecord {
 
 function cfsmThemeDefaults(): Record<string, unknown> {
   return {
-    showPingChart: false,
-    enableHomepageMultiPing: false,
+    defaultAppearance: "farm",
+    showPingChart: true,
+    enableHomepageMultiPing: true,
+    homepageMultiPingTaskIds: [1, 2, 3],
+    homepageMultiPingGroups: [{ taskIds: [1, 2, 3], clientUuids: [] }],
     fakePingForUnbound: false,
     showCostSummary: false,
     showCostSummaryFloatingButton: false,
     showTodayTrafficPopover: false,
     showConnections: true,
   };
+}
+
+function cfsmHomepageMultiPingGroups(value: unknown) {
+  if (!Array.isArray(value) || value.length === 0) {
+    return [{ taskIds: [1, 2, 3], clientUuids: [] }];
+  }
+
+  return value
+    .filter((group) => group && typeof group === "object" && !Array.isArray(group))
+    .map((group) => ({
+      ...(group as Record<string, unknown>),
+      taskIds: [1, 2, 3],
+    }));
 }
 
 export async function getConfig(options?: ApiCallOptions): Promise<Record<string, unknown>> {
@@ -378,6 +469,15 @@ export function mapConfigToMe(config: Record<string, unknown>): Me {
 }
 
 export function mapConfigToPublic(data: Record<string, unknown>): PublicConfig {
+  const themeOptions = asRecord(data.theme_options);
+  const themeSettings = {
+    ...cfsmThemeDefaults(),
+    ...themeOptions,
+    enableHomepageMultiPing: true,
+    homepageMultiPingTaskIds: [1, 2, 3],
+    homepageMultiPingGroups: cfsmHomepageMultiPingGroups(themeOptions.homepageMultiPingGroups),
+  };
+
   return {
     sitename: asString(data.site_title || document.title || "CF-Server-Monitor"),
     description: "CF-Server-Monitor theme.",
@@ -392,10 +492,7 @@ export function mapConfigToPublic(data: Record<string, unknown>): PublicConfig {
     metric_retention_days: asNumber(asRecord(data.long_history_config).days),
     custom_head: "",
     custom_body: "",
-    theme_settings: {
-      ...asRecord(data.theme_options),
-      ...cfsmThemeDefaults(),
-    },
+    theme_settings: themeSettings,
   };
 }
 
@@ -414,9 +511,9 @@ export async function getNodes(options?: ApiCallOptions): Promise<NodeInfo[]> {
 export async function getNodeSnapshots(
   options?: ApiCallOptions,
 ): Promise<Array<{ meta: NodeInfo; latest: Record<string, unknown> }>> {
-  const results = await requestAll<{ servers?: unknown[] }>("/api/servers", options);
+  const results = await requestAll<ServersPayload>("/api/servers", options);
   return results.flatMap((result) =>
-    (Array.isArray(result.data.servers) ? result.data.servers : [])
+    extractServersFromPayload(result.data)
       .map((server) => {
         const meta = mapServerToNodeInfo(server, result.baseIndex, result.baseUrl);
         rememberServerBase(meta.uuid, result.baseIndex);
@@ -474,10 +571,10 @@ export async function getNodesLatestStatus(
   options?: ApiCallOptions,
 ): Promise<Record<string, unknown>> {
   const wanted = uuids && uuids.length > 0 ? new Set(uuids) : null;
-  const results = await requestAll<{ servers?: unknown[] }>("/api/servers", options);
+  const results = await requestAll<ServersPayload>("/api/servers", options);
   const records: Record<string, unknown> = {};
   for (const result of results) {
-    for (const server of Array.isArray(result.data.servers) ? result.data.servers : []) {
+    for (const server of extractServersFromPayload(result.data)) {
       const id = asString(asRecord(server).id);
       if (!id || (wanted && !wanted.has(id))) continue;
       rememberServerBase(id, result.baseIndex);
@@ -518,42 +615,408 @@ export async function getLoadRecords(
   };
 }
 
-export async function getPingRecords(
-  _uuid?: string,
-  _hours?: number,
-  _options?: ApiCallOptions,
+function getCfsmProbeTask(taskId: number): PingTask | null {
+  const def = CFSM_PROBE_DEFS.find((item) => item.id === taskId);
+  if (!def) return null;
+  return {
+    id: def.id,
+    interval: 60,
+    name: def.name,
+    loss: 0,
+    clients: [],
+    type: def.type,
+    target: "",
+    weight: def.id,
+  };
+}
+
+function percentile(values: number[], ratio: number) {
+  if (values.length === 0) return null;
+  const index = (values.length - 1) * ratio;
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  if (lower === upper) return values[lower] ?? null;
+  const lowerValue = values[lower] ?? 0;
+  const upperValue = values[upper] ?? lowerValue;
+  return lowerValue + (upperValue - lowerValue) * (index - lower);
+}
+
+function buildPingStats(uuid: string, task: PingTask, records: PingRecordsResponse["records"]): PingTaskStats {
+  const successful = records
+    .map((record) => record.value)
+    .filter((value) => Number.isFinite(value) && value >= 0)
+    .sort((left, right) => left - right);
+  const total = records.reduce((sum, record) => sum + Math.max(1, Math.round(record.count ?? 1)), 0);
+  const lost = records.reduce((sum, record) => {
+    const count = Math.max(1, Math.round(record.count ?? 1));
+    const loss = typeof record.loss === "number" && Number.isFinite(record.loss)
+      ? clampLossPercent(record.loss)
+      : record.value < 0
+        ? 100
+        : 0;
+    return sum + (loss / 100) * count;
+  }, 0);
+  const latest = [...records].reverse().find((record) => record.value >= 0)?.value ?? null;
+  const avg = successful.length
+    ? successful.reduce((sum, value) => sum + value, 0) / successful.length
+    : null;
+  const p50 = percentile(successful, 0.5);
+  const p99 = percentile(successful, 0.99);
+
+  return {
+    client: uuid,
+    taskId: task.id,
+    name: task.name,
+    type: task.type,
+    interval: task.interval,
+    total,
+    valid: Math.max(0, Math.round(total - lost)),
+    loss: total > 0 ? (lost / total) * 100 : task.loss,
+    min: successful[0] ?? null,
+    max: successful[successful.length - 1] ?? null,
+    avg,
+    latest,
+    p50,
+    p99,
+    stddev: null,
+    p99P50Ratio: p50 && p99 ? Math.max(0, p99 - p50) / Math.min(50, Math.max(10, p50)) : 0,
+  };
+}
+
+async function getCfsmPingRecordsForNodes(
+  uuids: string[],
+  hours: number,
+  options?: ApiCallOptions,
 ): Promise<PingRecordsResponse> {
-  void _uuid;
-  void _hours;
-  void _options;
-  return { count: 0, records: [], tasks: [] };
+  const safeHours = hours > 0 ? hours : 0.167;
+  const responses = await Promise.all(
+    uuids.map(async (uuid) => {
+      const path = `/api/history/all?${new URLSearchParams({ id: uuid, hours: String(safeHours) })}`;
+      const knownBaseIndex = baseIndexByUuid.get(uuid);
+      const results =
+        typeof knownBaseIndex === "number"
+          ? [
+              await requestJson<unknown[]>(path, {
+                ...options,
+                baseIndex: knownBaseIndex,
+                autoRedirect: false,
+              }),
+            ]
+          : await requestAll<unknown[]>(path, { ...options, autoRedirect: false });
+      return { uuid, rows: results.flatMap((result) => (Array.isArray(result.data) ? result.data : [])) };
+    }),
+  );
+
+  const records = responses
+    .flatMap(({ uuid, rows }) =>
+      rows.flatMap((row) => {
+        const record = asRecord(row);
+        const time = normalizeTimestamp(record.timestamp);
+        if (time <= 0) return [];
+        return CFSM_PROBE_DEFS.flatMap((def) => {
+          const value = normalizeProbeField(record, def.pingField);
+          const loss = normalizeProbeField(record, def.lossField);
+          if (value == null && loss == null) return [];
+          return [{
+            task_id: def.id,
+            time,
+            value: value ?? -1,
+            client: uuid,
+            count: 1,
+            loss: loss == null ? (value == null ? 100 : 0) : clampLossPercent(loss),
+          }];
+        });
+      }),
+    )
+    .sort((left, right) => asNumber(left.time) - asNumber(right.time));
+  const observedTaskIds = new Set(records.map((record) => record.task_id));
+  const tasks = CFSM_PROBE_DEFS
+    .filter((def) => observedTaskIds.has(def.id))
+    .map((def) => ({
+      ...getCfsmProbeTask(def.id)!,
+      clients: uuids,
+    }));
+  const stats = responses.flatMap(({ uuid }) =>
+    tasks.map((task) =>
+      buildPingStats(
+        uuid,
+        task,
+        records.filter((record) => record.client === uuid && record.task_id === task.id),
+      ),
+    ),
+  );
+
+  return {
+    count: records.length,
+    records,
+    tasks,
+    stats,
+    rangeStartMs: Date.now() - safeHours * 60 * 60 * 1000,
+    rangeEndMs: Date.now(),
+    intervalSeconds: 60,
+  };
+}
+
+function readLatencyWindowValue(point: unknown, key: string) {
+  const record = asRecord(point);
+  return hasOwn(record, key) ? parseProbeMetricValue(record[key]) : null;
+}
+
+function timestampedWindowPoints(value: unknown) {
+  return (Array.isArray(value) ? value : [])
+    .map((point) => {
+      const record = asRecord(point);
+      const time = normalizeTimestamp(record.ts ?? record.timestamp);
+      return time > 0 ? { time, point } : null;
+    })
+    .filter((item): item is { time: number; point: unknown } => item !== null)
+    .sort((left, right) => left.time - right.time);
+}
+
+function readLatestWindowValue(value: unknown, key: string) {
+  const points = timestampedWindowPoints(value);
+  for (let index = points.length - 1; index >= 0; index -= 1) {
+    const current = readLatencyWindowValue(points[index]?.point, key);
+    if (current != null) return current;
+  }
+  return null;
+}
+
+function buildHomepagePingRecord(
+  uuid: string,
+  taskId: number,
+  time: number,
+  latency: number | null,
+  loss: number | null,
+): PingRecordsResponse["records"][number] | null {
+  if (time <= 0 || (latency == null && loss == null)) return null;
+  return {
+    task_id: taskId,
+    time,
+    value: latency ?? -1,
+    client: uuid,
+    count: 1,
+    loss: loss == null ? (latency == null ? 100 : 0) : clampLossPercent(loss),
+  };
+}
+
+function buildHomepagePingRecordsForServer(server: Record<string, unknown>, uuid: string) {
+  const pingWindow = timestampedWindowPoints(server.ping);
+  const lossWindow = timestampedWindowPoints(server.loss);
+  const pingByTime = new Map(pingWindow.map((item) => [item.time, item.point] as const));
+  const lossByTime = new Map(lossWindow.map((item) => [item.time, item.point] as const));
+  const times = Array.from(
+    new Set([...pingByTime.keys(), ...lossByTime.keys()]),
+  ).sort((left, right) => left - right);
+  const records: PingRecordsResponse["records"] = [];
+
+  for (const time of times) {
+    const pingPoint = pingByTime.get(time);
+    const lossPoint = lossByTime.get(time);
+    for (const def of HOMEPAGE_CFSM_PROBE_DEFS) {
+      const record = buildHomepagePingRecord(
+        uuid,
+        def.id,
+        time,
+        readLatencyWindowValue(pingPoint, def.windowKey),
+        readLatencyWindowValue(lossPoint, def.windowKey),
+      );
+      if (record) records.push(record);
+    }
+  }
+
+  return records;
+}
+
+function withHomepagePingLatestFallback(
+  stat: PingTaskStats,
+  server: Record<string, unknown>,
+  task: PingTask,
+) {
+  const def = CFSM_PROBE_DEFS.find((item) => item.id === task.id);
+  if (!def) return stat;
+  const latest =
+    readLatestWindowValue(server.ping, def.windowKey) ??
+    normalizeProbeField(server, def.pingField);
+  const loss =
+    readLatestWindowValue(server.loss, def.windowKey) ??
+    normalizeProbeField(server, def.lossField);
+  if (stat.total > 0) {
+    return {
+      ...stat,
+      latest: stat.latest ?? latest,
+      loss: loss ?? stat.loss ?? task.loss,
+    };
+  }
+
+  return {
+    ...stat,
+    loss: loss ?? task.loss,
+    min: latest,
+    max: latest,
+    avg: latest,
+    latest,
+    p50: latest,
+    p99: latest,
+  };
+}
+
+async function loadCfsmHomepagePingSnapshot(
+  entityIds: string[],
+  options?: ApiCallOptions,
+): Promise<HomepagePingSnapshot> {
+  const wanted = new Set(entityIds.filter(Boolean));
+  const [{ config, configWindow }, serverResults] = await Promise.all([
+    getConfig(options)
+      .then((config) => ({ config, configWindow: getLatencyWindowFromConfig(config) }))
+      .catch(() => ({
+        config: {} as Record<string, unknown>,
+        configWindow: normalizeLatencyWindowConfig(null),
+      })),
+    requestAll<ServersPayload>("/api/servers", {
+      ...options,
+      autoRedirect: false,
+    }),
+  ]);
+  const firstServerWindow = serverResults
+    .map((result) => asRecord(result.data.sysConfig).latency_window)
+    .find((value) => Object.keys(asRecord(value)).length > 0);
+  const windowConfig = Object.keys(asRecord(config.latency_window)).length > 0
+    ? configWindow
+    : normalizeLatencyWindowConfig(firstServerWindow);
+  const records: PingRecordsResponse["records"] = [];
+  const serverEntries: Array<{ uuid: string; server: Record<string, unknown> }> = [];
+  let snapshotEndMs = 0;
+
+  for (const result of serverResults) {
+    for (const rawServer of extractServersFromPayload(result.data)) {
+      const server = asRecord(rawServer);
+      const uuid = asString(server.id);
+      if (!uuid || (wanted.size > 0 && !wanted.has(uuid))) continue;
+      rememberServerBase(uuid, result.baseIndex);
+      serverEntries.push({ uuid, server });
+      const serverNow = normalizeTimestamp(server.current_timestamp ?? server.timestamp ?? server.last_updated);
+      if (serverNow > snapshotEndMs) snapshotEndMs = serverNow;
+      records.push(...buildHomepagePingRecordsForServer(server, uuid));
+    }
+  }
+
+  records.sort((left, right) => asNumber(left.time) - asNumber(right.time));
+  const tasks = HOMEPAGE_CFSM_PROBE_DEFS
+    .map((def) => ({
+      ...getCfsmProbeTask(def.id)!,
+      clients: entityIds,
+    }));
+  const stats = serverEntries.flatMap(({ uuid, server }) =>
+    tasks.map((task) =>
+      withHomepagePingLatestFallback(
+        buildPingStats(
+          uuid,
+          task,
+          records.filter((record) => record.client === uuid && record.task_id === task.id),
+        ),
+        server,
+        task,
+      ),
+    ),
+  );
+  const windowMs = windowConfig.hours * 60 * 60 * 1000;
+  const rangeEndMs = snapshotEndMs > 0 ? snapshotEndMs : Date.now();
+  const intervalSeconds = Math.max(1, (windowConfig.hours * 60 * 60) / windowConfig.points);
+
+  return {
+    count: records.length,
+    records,
+    tasks,
+    stats,
+    rangeStartMs: rangeEndMs - windowMs,
+    rangeEndMs,
+    windowMs,
+    pointCount: windowConfig.points,
+    intervalSeconds,
+    windowConfig,
+  };
+}
+
+async function getCfsmHomepagePingSnapshot(
+  entityIds: string[],
+  options?: ApiCallOptions,
+): Promise<HomepagePingSnapshot> {
+  const key = `${getApiBases().join("|")}|${entityIds.filter(Boolean).sort().join(",")}`;
+  const now = Date.now();
+  if (
+    homepagePingSnapshotCache &&
+    homepagePingSnapshotCache.key === key &&
+    now - homepagePingSnapshotCache.savedAt < HOMEPAGE_PING_SNAPSHOT_CACHE_MS
+  ) {
+    return homepagePingSnapshotCache.promise;
+  }
+
+  const promise = loadCfsmHomepagePingSnapshot(entityIds, options);
+  homepagePingSnapshotCache = { key, savedAt: now, promise };
+  try {
+    return await promise;
+  } catch (error) {
+    if (homepagePingSnapshotCache?.promise === promise) {
+      homepagePingSnapshotCache = null;
+    }
+    throw error;
+  }
+}
+
+export async function getPingRecords(
+  uuid: string,
+  hours = 6,
+  options?: ApiCallOptions,
+): Promise<PingRecordsResponse> {
+  return getCfsmPingRecordsForNodes(uuid ? [uuid] : [], hours, options);
 }
 
 export async function getPingOverview(
-  _hours?: number,
-  _taskId?: number,
-  _options?: ApiCallOptions & { entityIds?: string[]; includeStats?: boolean },
+  _hours = 1,
+  taskId?: number,
+  options?: ApiCallOptions & { entityIds?: string[]; includeStats?: boolean },
 ): Promise<{
   records: PingRecordsResponse["records"];
   tasks: PingTask[];
   intervalSeconds: number;
+  windowMs?: number;
+  rangeEndMs?: number;
+  pointCount?: number;
   stats?: PingTaskStats[];
 }> {
   void _hours;
-  void _taskId;
-  void _options;
-  return { records: [], tasks: [], intervalSeconds: 60, stats: [] };
+  const entityIds = options?.entityIds ?? [];
+  const data = await getCfsmHomepagePingSnapshot(entityIds, options);
+  const records = taskId == null
+    ? data.records
+    : data.records.filter((record) => record.task_id === taskId);
+  const tasks = taskId == null
+    ? data.tasks
+    : data.tasks.filter((task) => task.id === taskId);
+  const stats = taskId == null
+    ? data.stats
+    : data.stats?.filter((stat) => stat.taskId === taskId);
+  return {
+    records,
+    tasks,
+    intervalSeconds: data.intervalSeconds ?? 60,
+    windowMs: data.windowMs,
+    rangeEndMs: data.rangeEndMs,
+    pointCount: data.pointCount,
+    stats: options?.includeStats === false ? undefined : stats,
+  };
 }
 
 export async function getPingOverviewStats(
-  _hours?: number,
-  _taskIds?: number[],
-  _options?: ApiCallOptions & { entityIds?: string[] },
+  _hours = 1,
+  taskIds: number[] = [],
+  options?: ApiCallOptions & { entityIds?: string[] },
 ): Promise<PingTaskStats[]> {
   void _hours;
-  void _taskIds;
-  void _options;
-  return [];
+  const wantedTaskIds = new Set(taskIds);
+  const data = await getCfsmHomepagePingSnapshot(options?.entityIds ?? [], options);
+  return (data.stats ?? []).filter((stat) => wantedTaskIds.has(stat.taskId));
 }
 
 export function prewarmPingOverviewDependencies() {

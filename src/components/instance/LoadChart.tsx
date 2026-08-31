@@ -35,6 +35,7 @@ import { formatBytes, formatTrafficRateLabel } from "@/utils/format";
 import { historyChartRangeSeconds, historyCoverageLabel } from "@/utils/historyRange";
 import { resolveLoadRecordTotals } from "@/utils/loadMetrics";
 import { usePreferences } from "@/hooks/usePreferences";
+import { parseGpuUtil } from "@/utils/cfsmProbeMetrics";
 import type { LoadRecord, NodeMetrics } from "@/types/cfsm";
 
 const LOAD_HISTORY_SAMPLE_LIMIT = 360;
@@ -42,6 +43,7 @@ const LOAD_HISTORY_RENDER_LIMIT = 720;
 const REALTIME_HISTORY_SEED_LIMIT = 120;
 const REALTIME_SAMPLE_LIMIT = 600;
 const REALTIME_HISTORY_HOURS = 0.167;
+const REALTIME_WINDOW_SECONDS = 10 * 60;
 
 const CPU_KEYS = ["cpu"];
 const CPU_COLORS = [CHART_PALETTE.cpu];
@@ -49,6 +51,12 @@ const MEMORY_KEYS = ["ram", "swap"];
 const MEMORY_COLORS = [CHART_PALETTE.memory, CHART_PALETTE.warning];
 const DISK_KEYS = ["disk"];
 const DISK_COLORS = [CHART_PALETTE.disk];
+const LOAD_KEYS = ["load1", "load5", "load15"];
+const LOAD_COLORS = [CHART_PALETTE.success, CHART_PALETTE.warning, CHART_PALETTE.cpu];
+const GPU_KEYS = ["gpu"];
+const GPU_COLORS = ["#d65f5f"];
+const DISK_IO_KEYS = ["diskReadBps", "diskWriteBps"];
+const DISK_IO_COLORS = [CHART_PALETTE.success, CHART_PALETTE.warning];
 const NETWORK_KEYS = ["netIn", "netOut"];
 const NETWORK_COLORS = [CHART_PALETTE.success, CHART_PALETTE.cpu];
 const CONNECTION_KEYS = ["connections", "udp"];
@@ -60,6 +68,12 @@ const SERIES_LABELS: Record<string, string> = {
   ram: "内存",
   swap: "Swap",
   disk: "磁盘",
+  load1: "1 分钟",
+  load5: "5 分钟",
+  load15: "15 分钟",
+  gpu: "GPU",
+  diskReadBps: "读取",
+  diskWriteBps: "写入",
   netIn: "下行",
   netOut: "上行",
   connections: "TCP",
@@ -71,6 +85,12 @@ const LOAD_INTERPOLATE_KEYS = [
   "ram",
   "swap",
   "disk",
+  "load1",
+  "load5",
+  "load15",
+  "gpu",
+  "diskReadBps",
+  "diskWriteBps",
   "netIn",
   "netOut",
   "connections",
@@ -98,6 +118,12 @@ const DOWNSAMPLE_KEYS = [
   "ram",
   "swap",
   "disk",
+  "load1",
+  "load5",
+  "load15",
+  "gpu",
+  "diskReadBps",
+  "diskWriteBps",
   "netIn",
   "netOut",
   "connections",
@@ -140,6 +166,12 @@ function pointFromNode(node: NodeMetrics): ChartPoint {
     ram: node.ramTotal > 0 ? (node.ramUsed / node.ramTotal) * 100 : null,
     swap: node.swapTotal > 0 ? (node.swapUsed / node.swapTotal) * 100 : null,
     disk: node.diskTotal > 0 ? (node.diskUsed / node.diskTotal) * 100 : null,
+    load1: node.load1,
+    load5: node.load5,
+    load15: node.load15,
+    gpu: node.gpuUtil,
+    diskReadBps: node.diskReadBps,
+    diskWriteBps: node.diskWriteBps,
     netIn: node.netDown,
     netOut: node.netUp,
     connections: node.connectionsTcp,
@@ -151,6 +183,7 @@ function pointFromNode(node: NodeMetrics): ChartPoint {
 function formatTooltipValue(key: string, value: number | null | undefined, unit: string) {
   if (value == null || !Number.isFinite(value)) return "—";
   if (key === "netIn" || key === "netOut") return formatTrafficRateLabel(value);
+  if (key === "diskReadBps" || key === "diskWriteBps") return formatTrafficRateLabel(value);
   if (unit === "%") return `${value.toFixed(2)}%`;
   if (key === "process" || key === "connections" || key === "udp") return `${Math.round(value)}`;
   return value.toFixed(2);
@@ -166,6 +199,12 @@ function formatPercentAxisValue(value: number, min: number, max: number) {
 function formatNetworkAxisValue(value: number) {
   if (!Number.isFinite(value) || value <= 0) return "";
   return formatTrafficRateLabel(value);
+}
+
+function hasMetricValue(points: ChartPoint[], keys: string[]) {
+  return points.some((point) =>
+    keys.some((key) => typeof point[key] === "number" && Number.isFinite(point[key])),
+  );
 }
 
 function formatCountAxisValue(value: number, min: number, max: number) {
@@ -415,7 +454,10 @@ export function LoadChart({
     setRealtimePoints((prev) => {
       const last = prev[prev.length - 1];
       if (last && Math.abs(last.time - point.time) < 1) return prev;
-      return [...prev, point].slice(-REALTIME_SAMPLE_LIMIT);
+      const windowStart = point.time - REALTIME_WINDOW_SECONDS;
+      return [...prev, point]
+        .filter((item) => item.time >= windowStart)
+        .slice(-REALTIME_SAMPLE_LIMIT);
     });
   }, [active, isRealtime, node]);
 
@@ -441,6 +483,12 @@ export function LoadChart({
         ram: totals.ramTotal > 0 ? (record.ram / totals.ramTotal) * 100 : null,
         swap: totals.swapTotal > 0 ? (record.swap / totals.swapTotal) * 100 : null,
         disk: totals.diskTotal > 0 ? (record.disk / totals.diskTotal) * 100 : null,
+        load1: record.load,
+        load5: record.load5 ?? null,
+        load15: record.load15 ?? null,
+        gpu: parseGpuUtil(record.gpu_info),
+        diskReadBps: record.disk_read_bps ?? null,
+        diskWriteBps: record.disk_write_bps ?? null,
         netIn: record.net_in,
         netOut: record.net_out,
         connections: record.connections,
@@ -452,19 +500,31 @@ export function LoadChart({
     const filled = fillMissingMetricPoints(sampled);
     return interpolateMetricGaps(filled, LOAD_INTERPOLATE_KEYS) as ChartPoint[];
   }, [historyRecords, hours, totalFallbacks]);
+  const realtimeWindowEnd = useMemo(() => {
+    if (!isRealtime) return Date.now() / 1000;
+    const realtimeTail = realtimePoints[realtimePoints.length - 1]?.time;
+    const historyTail = historyPoints[historyPoints.length - 1]?.time;
+    return realtimeTail ?? historyTail ?? Date.now() / 1000;
+  }, [historyPoints, isRealtime, realtimePoints]);
 
   const points = useMemo<ChartPoint[]>(() => {
     if (isRealtime) {
-      const initial = historyPoints.slice(-REALTIME_HISTORY_SEED_LIMIT);
+      const windowStart = realtimeWindowEnd - REALTIME_WINDOW_SECONDS;
+      const windowEnd = realtimeWindowEnd + 5;
+      const initial = historyPoints
+        .filter((point) => point.time >= windowStart && point.time <= windowEnd)
+        .slice(-REALTIME_HISTORY_SEED_LIMIT);
       const merged = [...initial, ...realtimePoints].sort((a, b) => a.time - b.time);
       const deduped = merged.filter((point, index, arr) => {
         const next = arr[index + 1];
         return !next || Math.abs(next.time - point.time) >= 1;
       });
-      return deduped.slice(-REALTIME_SAMPLE_LIMIT);
+      return deduped
+        .filter((point) => point.time >= windowStart && point.time <= windowEnd)
+        .slice(-REALTIME_SAMPLE_LIMIT);
     }
     return historyPoints;
-  }, [historyPoints, isRealtime, realtimePoints]);
+  }, [historyPoints, isRealtime, realtimePoints, realtimeWindowEnd]);
 
   const rangeSummary = formatRangeSummary(hours);
   // API 各回退路径不保证返回顺序,最新值必须取自按时间排好序的 historyRecords。
@@ -483,8 +543,11 @@ export function LoadChart({
     ? `${formatChartCoverageTime(points[0].time)} - ${formatChartCoverageTime(points[points.length - 1].time)}`
     : "—";
   const requestedXRange = useMemo(
-    () => (isRealtime ? null : historyChartRangeSeconds(data)),
-    [data, isRealtime],
+    () =>
+      isRealtime
+        ? ([realtimeWindowEnd - REALTIME_WINDOW_SECONDS, realtimeWindowEnd] as [number, number])
+        : historyChartRangeSeconds(data),
+    [data, isRealtime, realtimeWindowEnd],
   );
   const coverageLabel = useMemo(
     () =>
@@ -493,6 +556,8 @@ export function LoadChart({
         : historyCoverageLabel(data, points[0]?.time, points[points.length - 1]?.time),
     [data, isRealtime, points],
   );
+  const hasGpuChart = hasMetricValue(points, GPU_KEYS);
+  const hasDiskIoChart = hasMetricValue(points, DISK_IO_KEYS);
 
   if (isLoading) {
     return <InstanceChartLoading title="负载图表" />;
@@ -658,6 +723,78 @@ export function LoadChart({
           axisSize={78}
           xRange={requestedXRange}
         />
+        <ChartCard
+          icon={<Gauge size={13} />}
+          title="系统负载"
+          uuid={uuid}
+          value={
+            isRealtime && node
+              ? `${node.load1.toFixed(2)} | ${node.load5.toFixed(2)} | ${node.load15.toFixed(2)}`
+              : latestHistoryRecord
+                ? `${(latestHistoryRecord.load ?? 0).toFixed(2)} | ${(latestHistoryRecord.load5 ?? 0).toFixed(2)} | ${(latestHistoryRecord.load15 ?? 0).toFixed(2)}`
+                : "—"
+          }
+          note="1 / 5 / 15 分钟"
+          points={points}
+          keys={LOAD_KEYS}
+          colors={LOAD_COLORS}
+          resolvedAppearance={resolvedAppearance}
+          rangeHours={hours}
+          spanGaps={connectNulls}
+          axisKind="count"
+          xRange={requestedXRange}
+        />
+        {hasGpuChart && (
+          <ChartCard
+            icon={<Cpu size={13} />}
+            title="GPU"
+            uuid={uuid}
+            value={
+              isRealtime && node
+                ? node.gpuUtil != null ? `${node.gpuUtil.toFixed(1)}%` : "—"
+                : latestHistoryRecord
+                  ? (() => {
+                      const util = parseGpuUtil(latestHistoryRecord.gpu_info);
+                      return util != null ? `${util.toFixed(1)}%` : "—";
+                    })()
+                  : "—"
+            }
+            note="使用率"
+            points={points}
+            keys={GPU_KEYS}
+            colors={GPU_COLORS}
+            resolvedAppearance={resolvedAppearance}
+            rangeHours={hours}
+            unit="%"
+            spanGaps={connectNulls}
+            axisKind="percent"
+            xRange={requestedXRange}
+          />
+        )}
+        {hasDiskIoChart && (
+          <ChartCard
+            icon={<HardDrive size={13} />}
+            title="磁盘 IO"
+            uuid={uuid}
+            value={
+              isRealtime && node
+                ? `${formatTrafficRateLabel(node.diskReadBps ?? 0)} / ${formatTrafficRateLabel(node.diskWriteBps ?? 0)}`
+                : latestHistoryRecord
+                  ? `${formatTrafficRateLabel(latestHistoryRecord.disk_read_bps ?? 0)} / ${formatTrafficRateLabel(latestHistoryRecord.disk_write_bps ?? 0)}`
+                  : "—"
+            }
+            note="读 / 写"
+            points={points}
+            keys={DISK_IO_KEYS}
+            colors={DISK_IO_COLORS}
+            resolvedAppearance={resolvedAppearance}
+            rangeHours={hours}
+            spanGaps={connectNulls}
+            axisKind="network"
+            axisSize={78}
+            xRange={requestedXRange}
+          />
+        )}
         <ChartCard
           icon={<Workflow size={13} />}
           title="连接数"

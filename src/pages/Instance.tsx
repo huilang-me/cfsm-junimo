@@ -14,7 +14,7 @@ import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useNodeMeta, useNodeStoreStatus } from "@/hooks/useNode";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 
-const DEFAULT_PING_HOURS = 4;
+const DEFAULT_PING_HOURS = 0;
 type TimeRangeOption = ReturnType<typeof buildLoadTimeRangeOptions>[number];
 
 function RangeSelector({

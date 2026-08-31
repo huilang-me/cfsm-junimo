@@ -6,6 +6,13 @@ function normalizeNodeIdentityValue(value: unknown): string {
   return String(value == null ? "" : value).trim().toLowerCase();
 }
 
+function splitNodeTags(value: unknown): string[] {
+  return String(value == null ? "" : value)
+    .split(/[\n,，;；]+/)
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
 // 把用户输入(字符串按换行/逗号/分号分隔,或已是数组)归一化成去重、去空的列表。
 export function normalizeNodeIdentityList(value: unknown): string[] {
   const rawValues = Array.isArray(value)
@@ -45,6 +52,10 @@ export function nodeMatchesIdentitySet(node: NodeInfo, identitySet: Set<string>)
   const record = node as unknown as Record<string, unknown>;
   for (const field of IDENTITY_FIELDS) {
     const normalized = normalizeNodeIdentityValue(record[field]);
+    if (normalized && identitySet.has(normalized)) return true;
+  }
+  for (const tag of splitNodeTags(record.tags)) {
+    const normalized = normalizeNodeIdentityValue(tag.replace(/<[^>]+>$/, ""));
     if (normalized && identitySet.has(normalized)) return true;
   }
   return false;

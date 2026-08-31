@@ -130,10 +130,10 @@ export function buildLoadTimeRangeOptions(maxHours: number | null | undefined) {
 
 export function buildPingTimeRangeOptions(maxHours: number | null | undefined) {
   if (!Number.isFinite(maxHours) || !maxHours || maxHours <= 0) {
-    return [...PING_TIME_RANGE_OPTIONS];
+    return buildHistoryRangeOptions(PING_TIME_RANGE_OPTIONS, null, true);
   }
   const safeMaxHours = Math.floor(maxHours);
-  return PING_TIME_RANGE_OPTIONS.filter((option) => option.value <= safeMaxHours);
+  return buildHistoryRangeOptions(PING_TIME_RANGE_OPTIONS, safeMaxHours, true);
 }
 
 const GRID_CHART_DEFAULT = { w: 320, h: 132 };

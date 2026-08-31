@@ -7,6 +7,7 @@ import {
   mapServerToLatestRecord,
   mapServerToNodeInfo,
 } from "@/services/api";
+import { parseGpuUtil, parseProbeMetricValue } from "@/utils/cfsmProbeMetrics";
 
 type Listener = () => void;
 type RealtimePayload = Record<string, unknown>;
@@ -126,6 +127,21 @@ function emptyMetrics(info: NodeInfo, online: boolean | null): NodeMetrics {
     connectionsTcp: 0,
     connectionsUdp: 0,
     updatedAt: 0,
+    gpuUtil: null,
+    diskReadBps: null,
+    diskWriteBps: null,
+    diskReadIops: null,
+    diskWriteIops: null,
+    diskAwaitMs: null,
+    diskUtil: null,
+    pingCt: null,
+    pingCu: null,
+    pingCm: null,
+    pingBd: null,
+    lossCt: null,
+    lossCu: null,
+    lossCm: null,
+    lossBd: null,
   };
 }
 
@@ -200,6 +216,21 @@ function mergeRealtime(
     connectionsTcp: rt.connections?.tcp ?? 0,
     connectionsUdp: rt.connections?.udp ?? 0,
     updatedAt: updatedAt > 0 ? updatedAt : metrics.updatedAt,
+    gpuUtil: rt.gpuUtil !== undefined ? rt.gpuUtil : metrics.gpuUtil,
+    diskReadBps: rt.diskReadBps !== undefined ? rt.diskReadBps : metrics.diskReadBps,
+    diskWriteBps: rt.diskWriteBps !== undefined ? rt.diskWriteBps : metrics.diskWriteBps,
+    diskReadIops: rt.diskReadIops !== undefined ? rt.diskReadIops : metrics.diskReadIops,
+    diskWriteIops: rt.diskWriteIops !== undefined ? rt.diskWriteIops : metrics.diskWriteIops,
+    diskAwaitMs: rt.diskAwaitMs !== undefined ? rt.diskAwaitMs : metrics.diskAwaitMs,
+    diskUtil: rt.diskUtil !== undefined ? rt.diskUtil : metrics.diskUtil,
+    pingCt: rt.pingCt !== undefined ? rt.pingCt : metrics.pingCt,
+    pingCu: rt.pingCu !== undefined ? rt.pingCu : metrics.pingCu,
+    pingCm: rt.pingCm !== undefined ? rt.pingCm : metrics.pingCm,
+    pingBd: rt.pingBd !== undefined ? rt.pingBd : metrics.pingBd,
+    lossCt: rt.lossCt !== undefined ? rt.lossCt : metrics.lossCt,
+    lossCu: rt.lossCu !== undefined ? rt.lossCu : metrics.lossCu,
+    lossCm: rt.lossCm !== undefined ? rt.lossCm : metrics.lossCm,
+    lossBd: rt.lossBd !== undefined ? rt.lossBd : metrics.lossBd,
   };
 }
 
@@ -226,7 +257,22 @@ function shallowEqualMetrics(a: NodeMetrics, b: NodeMetrics) {
     a.process === b.process &&
     a.connectionsTcp === b.connectionsTcp &&
     a.connectionsUdp === b.connectionsUdp &&
-    a.updatedAt === b.updatedAt
+    a.updatedAt === b.updatedAt &&
+    a.gpuUtil === b.gpuUtil &&
+    a.diskReadBps === b.diskReadBps &&
+    a.diskWriteBps === b.diskWriteBps &&
+    a.diskReadIops === b.diskReadIops &&
+    a.diskWriteIops === b.diskWriteIops &&
+    a.diskAwaitMs === b.diskAwaitMs &&
+    a.diskUtil === b.diskUtil &&
+    a.pingCt === b.pingCt &&
+    a.pingCu === b.pingCu &&
+    a.pingCm === b.pingCm &&
+    a.pingBd === b.pingBd &&
+    a.lossCt === b.lossCt &&
+    a.lossCu === b.lossCu &&
+    a.lossCm === b.lossCm &&
+    a.lossBd === b.lossBd
   );
 }
 
@@ -512,6 +558,29 @@ function parseLoadTriplet(value: unknown): [number, number, number] {
   return [asNumber(parts[0]), asNumber(parts[1]), asNumber(parts[2])];
 }
 
+function pickProbeMetric(payload: RealtimePayload, key: string) {
+  return Object.prototype.hasOwnProperty.call(payload, key)
+    ? parseProbeMetricValue(payload[key])
+    : undefined;
+}
+
+function optionalNumber(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const parsed = asNumber(value, Number.NaN);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function pickDiskIoMetric(payload: RealtimePayload, disk: RealtimePayload, flatKey: string, diskKey: string) {
+  if (Object.prototype.hasOwnProperty.call(payload, flatKey)) {
+    return optionalNumber(payload[flatKey]);
+  }
+  if (Object.prototype.hasOwnProperty.call(disk, diskKey)) {
+    return optionalNumber(disk[diskKey]);
+  }
+  return undefined;
+}
+
 // 旧扁平协议的 connections 是 TCP+UDP 合计。
 export function resolveFlatConnectionsTcp(payload: RealtimePayload): number {
   if (payload.connections_tcp != null) return asNumber(payload.connections_tcp);
@@ -572,6 +641,23 @@ function normalizeRealtime(
       uptime: asNumber(payload.uptime),
       process: asNumber(payload.process),
       updated_at: (payload.updated_at ?? payload.time) as string | number | undefined,
+      gpuUtil: Object.prototype.hasOwnProperty.call(payload, "gpu_info")
+        ? parseGpuUtil(payload.gpu_info)
+        : undefined,
+      diskReadBps: pickDiskIoMetric(payload, disk, "disk_read_bps", "read_bps"),
+      diskWriteBps: pickDiskIoMetric(payload, disk, "disk_write_bps", "write_bps"),
+      diskReadIops: pickDiskIoMetric(payload, disk, "disk_read_iops", "read_iops"),
+      diskWriteIops: pickDiskIoMetric(payload, disk, "disk_write_iops", "write_iops"),
+      diskAwaitMs: pickDiskIoMetric(payload, disk, "disk_await_ms", "await_ms"),
+      diskUtil: pickDiskIoMetric(payload, disk, "disk_util", "util"),
+      pingCt: pickProbeMetric(payload, "ping_ct"),
+      pingCu: pickProbeMetric(payload, "ping_cu"),
+      pingCm: pickProbeMetric(payload, "ping_cm"),
+      pingBd: pickProbeMetric(payload, "ping_bd"),
+      lossCt: pickProbeMetric(payload, "loss_ct"),
+      lossCu: pickProbeMetric(payload, "loss_cu"),
+      lossCm: pickProbeMetric(payload, "loss_cm"),
+      lossBd: pickProbeMetric(payload, "loss_bd"),
     };
   }
 
@@ -612,6 +698,23 @@ function normalizeRealtime(
       | string
       | number
       | undefined,
+    gpuUtil: Object.prototype.hasOwnProperty.call(payload, "gpu_info")
+      ? parseGpuUtil(payload.gpu_info)
+      : undefined,
+    diskReadBps: pickDiskIoMetric(payload, disk, "disk_read_bps", "read_bps"),
+    diskWriteBps: pickDiskIoMetric(payload, disk, "disk_write_bps", "write_bps"),
+    diskReadIops: pickDiskIoMetric(payload, disk, "disk_read_iops", "read_iops"),
+    diskWriteIops: pickDiskIoMetric(payload, disk, "disk_write_iops", "write_iops"),
+    diskAwaitMs: pickDiskIoMetric(payload, disk, "disk_await_ms", "await_ms"),
+    diskUtil: pickDiskIoMetric(payload, disk, "disk_util", "util"),
+    pingCt: pickProbeMetric(payload, "ping_ct"),
+    pingCu: pickProbeMetric(payload, "ping_cu"),
+    pingCm: pickProbeMetric(payload, "ping_cm"),
+    pingBd: pickProbeMetric(payload, "ping_bd"),
+    lossCt: pickProbeMetric(payload, "loss_ct"),
+    lossCu: pickProbeMetric(payload, "loss_cu"),
+    lossCm: pickProbeMetric(payload, "loss_cm"),
+    lossBd: pickProbeMetric(payload, "loss_bd"),
   };
 }
 
@@ -622,7 +725,7 @@ function applyLatestStatus(records: Record<string, unknown>) {
   let nextMetricsByUuid = state.metricsByUuid;
   let nextTrafficTrends = state.trafficTrends;
 
-  for (const uuid of state.order) {
+  for (const uuid of Object.keys(records)) {
     const meta = state.metaByUuid[uuid];
     const prev = state.metricsByUuid[uuid];
     if (!meta || !prev) continue;
@@ -947,10 +1050,23 @@ function extractServerSnapshots(
     .filter((snapshot): snapshot is NodeSnapshot => Boolean(snapshot));
 }
 
-function extractRealtimeRecords(message: unknown): Record<string, unknown> {
+function mergeRealtimeRecordFrames(frames: Array<Record<string, unknown>>): Record<string, unknown> {
+  const merged: Record<string, unknown> = {};
+  for (const frame of frames) {
+    for (const [serverId, record] of Object.entries(frame)) {
+      merged[serverId] = {
+        ...asRecord(merged[serverId]),
+        ...asRecord(record),
+      };
+    }
+  }
+  return merged;
+}
+
+function extractRealtimeRecordFrames(message: unknown): Array<Record<string, unknown>> {
   const payload = asRecord(message);
   if (payload.type === "batchUpdate" && Array.isArray(payload.updates)) {
-    const records: Record<string, unknown> = {};
+    const frames: Array<Record<string, unknown>> = [];
     for (const update of payload.updates) {
       const group = asRecord(update);
       const serverId = String(group.serverId || group.id || "");
@@ -959,28 +1075,29 @@ function extractRealtimeRecords(message: unknown): Record<string, unknown> {
         const item = asRecord(sample);
         const data = asRecord(item.data || item.payload || item.metrics);
         if (Object.keys(data).length === 0) continue;
-        records[serverId] = {
-          ...asRecord(records[serverId]),
-          ...data,
-          last_updated: item.ts || data.last_updated || payload.ts,
-        };
+        frames.push({
+          [serverId]: {
+            ...data,
+            last_updated: item.ts || data.last_updated || payload.ts,
+          },
+        });
       }
     }
-    return records;
+    return frames;
   }
 
   const serverId = String(payload.serverId || payload.id || "");
   const data = asRecord(payload.data || payload.payload || payload.metrics);
   if (serverId && Object.keys(data).length > 0) {
-    return {
+    return [{
       [serverId]: {
         ...data,
         last_updated: payload.ts || data.last_updated,
       },
-    };
+    }];
   }
 
-  return {};
+  return [];
 }
 
 function snapshotsFromUnknownRealtimeRecords(
@@ -1034,12 +1151,15 @@ function openLiveSocket(baseIndex: number, subscribe: string) {
         return;
       }
 
-      const records = extractRealtimeRecords(message);
+      const recordFrames = extractRealtimeRecordFrames(message);
+      const records = mergeRealtimeRecordFrames(recordFrames);
       applyNodeSnapshots([
         ...extractServerSnapshots(message, baseIndex, baseUrl),
         ...snapshotsFromUnknownRealtimeRecords(records, baseIndex, baseUrl),
       ]);
-      applyLatestStatusAndCommit(records);
+      for (const frame of recordFrames) {
+        applyLatestStatusAndCommit(frame);
+      }
     });
 
     socket.addEventListener("close", () => {

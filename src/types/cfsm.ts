@@ -81,6 +81,21 @@ export interface NodeRealtime {
   uptime: number;
   process: number;
   updated_at?: string | number;
+  gpuUtil?: number | null;
+  diskReadBps?: number | null;
+  diskWriteBps?: number | null;
+  diskReadIops?: number | null;
+  diskWriteIops?: number | null;
+  diskAwaitMs?: number | null;
+  diskUtil?: number | null;
+  pingCt?: number | null;
+  pingCu?: number | null;
+  pingCm?: number | null;
+  pingBd?: number | null;
+  lossCt?: number | null;
+  lossCu?: number | null;
+  lossCm?: number | null;
+  lossBd?: number | null;
 }
 
 /** 展示用模型:扁平化的节点信息 + 实时指标 + 在线标志。 */
@@ -107,6 +122,21 @@ export interface NodeMetrics {
   connectionsTcp: number;
   connectionsUdp: number;
   updatedAt: number;
+  gpuUtil: number | null;
+  diskReadBps: number | null;
+  diskWriteBps: number | null;
+  diskReadIops: number | null;
+  diskWriteIops: number | null;
+  diskAwaitMs: number | null;
+  diskUtil: number | null;
+  pingCt: number | null;
+  pingCu: number | null;
+  pingCm: number | null;
+  pingBd: number | null;
+  lossCt: number | null;
+  lossCu: number | null;
+  lossCm: number | null;
+  lossBd: number | null;
 }
 
 /**
@@ -227,6 +257,8 @@ export const LoadRecordSchema = z
     swap: z.number().default(0),
     swap_total: z.number().default(0),
     load: z.number().default(0),
+    load5: z.number().optional(),
+    load15: z.number().optional(),
     temp: z.number().default(0),
     disk: z.number().default(0),
     disk_total: z.number().default(0),
@@ -237,6 +269,13 @@ export const LoadRecordSchema = z
     process: z.number().default(0),
     connections: z.number().default(0),
     connections_udp: z.number().default(0),
+    gpu_info: z.unknown().optional(),
+    disk_read_bps: z.number().optional(),
+    disk_write_bps: z.number().optional(),
+    disk_read_iops: z.number().optional(),
+    disk_write_iops: z.number().optional(),
+    disk_await_ms: z.number().optional(),
+    disk_util: z.number().optional(),
     time: z.union([z.string(), z.number()]),
     client: z.string().default(""),
   })
@@ -288,6 +327,8 @@ export interface PingRecordsResponse {
   intervalSeconds?: number;
   rangeStartMs?: number;
   rangeEndMs?: number;
+  windowMs?: number;
+  pointCount?: number;
   /** 新 metric API 返回的服务端区间统计；旧后端回退时不存在。 */
   stats?: PingTaskStats[];
 }
@@ -321,6 +362,12 @@ export interface PingOverviewItem {
   lastValue: number | null;
   /** metric API 聚合桶的真实宽度；旧 records 接口没有该字段。 */
   metricIntervalMs?: number;
+  /** 首页三网窗口总时长，来自 /api/config.latency_window.hours。 */
+  windowMs?: number;
+  /** 首页三网窗口右边界，优先来自 /api/servers 的 current_timestamp。 */
+  rangeEndMs?: number;
+  /** 首页三网窗口点数，来自 /api/config.latency_window.points。 */
+  pointCount?: number;
   samples: Array<{
     time: number;
     value: number;
