@@ -1,0 +1,57 @@
+name: Deploy Build Branch
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - package.json
+      - package-lock.json
+      - index.html
+      - vite.config.ts
+      - tsconfig*.json
+      - src/**
+      - public/**
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Push dist to build branch
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+
+          cp -r dist /tmp/dist-build
+
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+
+          if git ls-remote --exit-code --heads origin build; then
+            git fetch origin build:refs/remotes/origin/build
+            git worktree add -B build /tmp/build-branch origin/build
+          else
+            git worktree add --detach /tmp/build-branch
+            cd /tmp/build-branch
+            git switch --orphan build
+          fi
+
+          cd /tmp/build-branch
+          git rm -r --ignore-unmatch .
+          cp -r /tmp/dist-build/. .
+
+          git add -A
+          git commit --allow-empty -m "chore: build dist for v${VERSION}"
+          git push origin build
