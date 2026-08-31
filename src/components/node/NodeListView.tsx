@@ -230,6 +230,7 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
   const redrawKey = `${resolvedAppearance}:${colorsVersion}`;
   const model = useNodeCardModel(uuid, {
     pingBucketCount: LIST_PING_BUCKETS,
+    includeCtPing: true,
   });
 
   if (!model.node) {
@@ -239,8 +240,8 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
   const {
     node,
     traffic,
-    ping,
-    pingBuckets,
+    displayPing,
+    displayPingBuckets,
     footerTags,
     expire,
     expireColor,
@@ -255,11 +256,11 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
     osName,
   } = model;
   const listPingState = resolveListPingState(
-    ping.loadState,
+    displayPing.loadState,
     hasRealHomepagePingBinding,
-    ping.isAssigned,
+    displayPing.isAssigned,
   );
-  const listPingStatus = formatListPingStatus(ping.lastValue, listPingState);
+  const listPingStatus = formatListPingStatus(displayPing.lastValue, listPingState);
   const detailLabels = nodeDetailLinkLabels(node.name, osName);
   const usedPct = `${Math.round(clamp01(traffic.fraction) * 100)}%`;
   const rowLabel = [
@@ -374,12 +375,12 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
 
       <div className="node-list-cell col-net">
         <ListLatency
-          latency={ping.lastValue}
-          loadState={ping.loadState}
+          latency={displayPing.lastValue}
+          loadState={displayPing.loadState}
           hasRealHomepagePingBinding={hasRealHomepagePingBinding}
-          pingIsAssigned={ping.isAssigned}
+          pingIsAssigned={displayPing.isAssigned}
           latencyColor={latencyColor}
-          buckets={pingBuckets}
+          buckets={displayPingBuckets}
           redrawKey={redrawKey}
         />
       </div>

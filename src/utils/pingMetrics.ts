@@ -37,7 +37,7 @@ export function resolvePingSampleCounts(
   const lost =
     typeof reportedLoss === "number" && Number.isFinite(reportedLoss)
       ? Math.min(total, Math.max(0, (reportedLoss / 100) * total))
-      : sample.value < 0
+      : sample.value != null && sample.value < 0
         ? total
         : 0;
   return { total, lost, valid: total - lost };
@@ -163,7 +163,12 @@ export function reconcilePingMetricStats(
     current.total += count;
     current.valid += valid;
     current.lost += lost;
-    if (record.value >= 0 && valid > 0) {
+    if (
+      typeof record.value === "number" &&
+      Number.isFinite(record.value) &&
+      record.value >= 0 &&
+      valid > 0
+    ) {
       current.latencySum += record.value * valid;
     }
     totals.set(key, current);

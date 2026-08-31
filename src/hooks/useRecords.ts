@@ -1,16 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
-import { getLoadRecords, getPingRecords } from "@/services/api";
+import { getInstanceHistory, getLoadRecords, getPingRecords } from "@/services/api";
 
 const RECORD_QUERY_OPTIONS = {
-  staleTime: 300_000,
+  staleTime: Infinity,
+  gcTime: Infinity,
   refetchOnWindowFocus: false,
   refetchOnReconnect: false,
+  refetchOnMount: false,
 } as const;
 
 export function useLoadRecords(uuid: string, hours = 6, enabled = true) {
   return useQuery({
     queryKey: ["records", "load", uuid, hours],
-    queryFn: ({ signal }) => getLoadRecords(uuid, hours, { signal }),
+    queryFn: () => getLoadRecords(uuid, hours),
     ...RECORD_QUERY_OPTIONS,
     enabled: Boolean(uuid) && enabled,
   });
@@ -20,7 +22,16 @@ export function useLoadRecords(uuid: string, hours = 6, enabled = true) {
 export function usePingRecords(uuid: string, hours = 6, enabled = true) {
   return useQuery({
     queryKey: ["records", "ping", uuid, hours],
-    queryFn: ({ signal }) => getPingRecords(uuid, hours, { signal }),
+    queryFn: () => getPingRecords(uuid, hours),
+    ...RECORD_QUERY_OPTIONS,
+    enabled: Boolean(uuid) && enabled,
+  });
+}
+
+export function useInstanceHistory(uuid: string, hours = 6, enabled = true) {
+  return useQuery({
+    queryKey: ["records", "instance", uuid, hours],
+    queryFn: () => getInstanceHistory(uuid, hours),
     ...RECORD_QUERY_OPTIONS,
     enabled: Boolean(uuid) && enabled,
   });

@@ -10,7 +10,7 @@
 } from "react";
 import UplotReact from "uplot-react";
 import type uPlot from "uplot";
-import { ArrowDown, ArrowUp, Cpu, Gauge, HardDrive, MemoryStick, Network, RefreshCw, Workflow } from "lucide-react";
+import { ArrowDown, ArrowUp, Cpu, Gauge, HardDrive, MemoryStick, Network, Workflow } from "lucide-react";
 import { useLoadRecords } from "@/hooks/useRecords";
 import { useNodeMeta, useNodeMetrics } from "@/hooks/useNode";
 import type { ResolvedAppearance } from "@/utils/background";
@@ -32,11 +32,11 @@ import {
   interpolateMetricGaps,
 } from "./chartData";
 import { formatBytes, formatTrafficRateLabel } from "@/utils/format";
-import { historyChartRangeSeconds, historyCoverageLabel } from "@/utils/historyRange";
+import { historyCoverageLabel } from "@/utils/historyRange";
 import { resolveLoadRecordTotals } from "@/utils/loadMetrics";
 import { usePreferences } from "@/hooks/usePreferences";
 import { parseGpuUtil } from "@/utils/cfsmProbeMetrics";
-import type { LoadRecord, NodeMetrics } from "@/types/cfsm";
+import type { LoadRecord, LoadRecordsResponse, NodeMetrics } from "@/types/cfsm";
 
 const LOAD_HISTORY_SAMPLE_LIMIT = 360;
 const LOAD_HISTORY_RENDER_LIMIT = 720;
@@ -422,17 +422,26 @@ export function LoadChart({
   uuid,
   hours,
   active = true,
+  historyQuery,
 }: {
   uuid: string;
   hours: number;
   active?: boolean;
+  historyQuery?: {
+    data?: LoadRecordsResponse;
+    isError: boolean;
+    isFetching: boolean;
+    isLoading: boolean;
+    refetch: () => void;
+  };
 }) {
   const queryHours = hours === 0 ? REALTIME_HISTORY_HOURS : hours;
-  const { data, isError, isFetching, isLoading, refetch } = useLoadRecords(
+  const ownQuery = useLoadRecords(
     uuid,
     queryHours,
-    active,
+    active && !historyQuery,
   );
+  const { data, isError, isFetching, isLoading, refetch } = historyQuery ?? ownQuery;
   const isRealtime = hours === 0;
   const node = useNodeMetrics(uuid, isRealtime && active, "node");
   const meta = useNodeMeta(uuid, "node");
@@ -542,13 +551,7 @@ export function LoadChart({
   const coverageSummary = points.length
     ? `${formatChartCoverageTime(points[0].time)} - ${formatChartCoverageTime(points[points.length - 1].time)}`
     : "—";
-  const requestedXRange = useMemo(
-    () =>
-      isRealtime
-        ? ([realtimeWindowEnd - REALTIME_WINDOW_SECONDS, realtimeWindowEnd] as [number, number])
-        : historyChartRangeSeconds(data),
-    [data, isRealtime, realtimeWindowEnd],
-  );
+  const requestedXRange = null;
   const coverageLabel = useMemo(
     () =>
       isRealtime
@@ -608,16 +611,6 @@ export function LoadChart({
             active={connectNulls}
             onToggle={() => setConnectNulls((value) => !value)}
           />
-          <button
-            type="button"
-            className="instance-toggle-button"
-            onClick={() => void refetch()}
-            disabled={isFetching}
-            aria-busy={isFetching}
-          >
-            <RefreshCw size={14} aria-hidden />
-            {isFetching ? "刷新中" : "刷新"}
-          </button>
           <span className="instance-chart-range-chip">{rangeSummary}</span>
         </div>
       }

@@ -1228,6 +1228,9 @@ body::after {
 }
 
 .instance-chart-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
   width: 100%;
   min-height: 560px;
 }
@@ -1236,7 +1239,8 @@ body::after {
   display: none !important;
 }
 
-.instance-segmented {
+.instance-segmented,
+.instance-range-selector {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1247,11 +1251,13 @@ body::after {
   background: var(--surface);
 }
 
-.instance-segmented.is-scrollable {
+.instance-segmented.is-scrollable,
+.instance-range-selector.is-scrollable {
   overflow-x: auto;
 }
 
 .instance-segmented button,
+.instance-range-selector button,
 .instance-toggle-button {
   display: inline-flex;
   align-items: center;
@@ -1306,6 +1312,7 @@ body::after {
 }
 
 .instance-segmented button[data-active="true"],
+.instance-range-selector button[data-active="true"],
 .instance-toggle-button[data-active="true"],
 .instance-toggle-button:hover {
   color: var(--text-primary);
@@ -1445,6 +1452,17 @@ body::after {
 
 .instance-uplot-wrap.is-large {
   margin-top: 16px;
+}
+
+.instance-ping-figures {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 14px;
+}
+
+.instance-ping-figure {
+  min-width: 0;
 }
 
 /* 折线入场：从左到右扫出，模拟逐渐画出（canvas 没法逐条 path 动画，用整体揭示近似） */
@@ -1620,7 +1638,8 @@ body::after {
     min-height: 0;
   }
 
-  .instance-segmented {
+  .instance-segmented,
+  .instance-range-selector {
     width: 100%;
     justify-content: flex-start;
   }

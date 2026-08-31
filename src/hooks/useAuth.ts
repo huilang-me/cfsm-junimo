@@ -5,10 +5,13 @@ import { CONFIG_QUERY_KEY } from "@/hooks/usePublicConfig";
 export function useAuth() {
   return useQuery({
     queryKey: CONFIG_QUERY_KEY,
-    queryFn: ({ signal }) => getConfig({ signal }),
+    queryFn: () => getConfig(),
     select: mapConfigToMe,
-    staleTime: 30_000,
-    // 后台在新标签页登录后，返回时必须立即校验。
-    refetchOnWindowFocus: "always",
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
   });
 }

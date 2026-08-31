@@ -5,11 +5,10 @@ import { useNodeCardSnapshots } from "@/hooks/useNode";
 import {
   buildPingBuckets,
   useNodePingOverview,
-  useNodePingOverviewLines,
   usePingBuckets,
 } from "@/hooks/usePingOverview";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
-import type { HomepagePingDisplayLine, HomepagePingLine } from "@/types/cfsm";
+import type { HomepagePingDisplayLine, HomepagePingLine, PingOverviewBucket, PingOverviewItem } from "@/types/cfsm";
 import { formatRenewalPrice } from "@/utils/billing";
 import { getExpireTextColor } from "@/utils/expireStatus";
 import {
@@ -29,16 +28,18 @@ import { resolveTrafficUsage, trafficTypeLabel, type TrafficDisplay } from "@/ut
 import { resolveOsInfo } from "@/components/ui/OsLogo";
 import {
   hasHomepagePingTaskBinding,
-  hasUsableHomepageMultiPingGroups,
-  HOMEPAGE_MULTI_PING_TASK_COUNT,
-  resolveHomepagePingTaskIdsByGroups,
 } from "@/utils/pingTasks";
 import { getCfsmProbeName } from "@/utils/cfsmProbeMetrics";
 
 interface NodeCardModelOptions {
   pingBucketCount?: number;
   includeMultiPing?: boolean;
+  includeCtPing?: boolean;
 }
+
+const CFSM_HOMEPAGE_MULTI_PING_TASK_IDS = [1, 2, 3];
+const EMPTY_HOMEPAGE_PING_LINES: HomepagePingLine[] = [];
+const EMPTY_PING_BUCKETS: PingOverviewBucket[] = [];
 
 export function shouldRenderHomepagePingBars(
   hasRealHomepagePingBinding: boolean,
@@ -52,6 +53,7 @@ export function useNodeCardModel(
   {
     pingBucketCount,
     includeMultiPing = false,
+    includeCtPing = false,
   }: NodeCardModelOptions = {},
 ) {
   const { meta, metrics, trafficTrend } = useNodeCardSnapshots(uuid);
@@ -59,17 +61,10 @@ export function useNodeCardModel(
     showCardGroup,
     fakePingForUnbound,
     homepagePingBindings,
-    enableHomepageMultiPing,
-    homepageMultiPingTaskIds,
-    homepageMultiPingGroups,
   } = useThemeSettings();
-  const multiPingActive =
-    includeMultiPing &&
-    enableHomepageMultiPing &&
-    (homepageMultiPingTaskIds.length === HOMEPAGE_MULTI_PING_TASK_COUNT ||
-      hasUsableHomepageMultiPingGroups(homepageMultiPingGroups));
-  const realPing = useNodePingOverview(uuid, !multiPingActive);
-  const realPingLines = useNodePingOverviewLines(uuid, multiPingActive);
+  const multiPingActive = includeMultiPing;
+  const realPing = useNodePingOverview(uuid, !multiPingActive && !includeCtPing);
+  const realPingLines = metrics?.homepagePingLines ?? EMPTY_HOMEPAGE_PING_LINES;
   const hasRealHomepagePingBinding = useMemo(
     () =>
       multiPingActive || hasHomepagePingTaskBinding(uuid, homepagePingBindings),
@@ -99,18 +94,15 @@ export function useNodeCardModel(
     !multiPingActive,
   );
   // 与 usePingBuckets 同理:窗口按分钟前移,不依赖数据刷新才滑动。
-  const bucketNow = useMinuteClock(multiPingActive);
+  const bucketNow = useMinuteClock(multiPingActive || includeCtPing);
   const homepagePingLines = useMemo<HomepagePingDisplayLine[]>(() => {
     if (
       !multiPingActive
     ) {
       return [];
     }
-    // 多套三网线路:按节点所属组解析(互斥,组顺序优先;兜底组吸收未分配节点)。
-    // 每个节点只属于一套线路,行数恒为 3,展示组件无需感知组的存在。
-    const taskIds =
-      resolveHomepagePingTaskIdsByGroups([uuid], homepageMultiPingGroups).get(uuid) ??
-      homepageMultiPingTaskIds;
+    // CFSM 的 /api/servers 固定返回 ct/cu/cm；首页三网展示也固定为这三条。
+    const taskIds = CFSM_HOMEPAGE_MULTI_PING_TASK_IDS;
     return taskIds.map((taskId) => {
       const loaded = realPingLines.find((line) => line.taskId === taskId);
       const line: HomepagePingLine =
@@ -132,13 +124,75 @@ export function useNodeCardModel(
     });
   }, [
     bucketNow,
-    homepageMultiPingGroups,
-    homepageMultiPingTaskIds,
     multiPingActive,
     pingBucketCount,
     realPingLines,
     uuid,
   ]);
+  const ctPing = useMemo<PingOverviewItem | null>(() => {
+    if (!includeCtPing || !metrics) return null;
+    const ctLine = realPingLines.find((line) => line.taskId === 1);
+    if (ctLine) {
+      return {
+        client: ctLine.client,
+        isAssigned: true,
+        loadState: ctLine.loadState,
+        lastValue: ctLine.lastValue,
+        samples: ctLine.samples,
+        max: ctLine.max,
+        loss: ctLine.loss,
+        metricIntervalMs: ctLine.metricIntervalMs,
+        windowMs: ctLine.windowMs,
+        rangeEndMs: ctLine.rangeEndMs,
+        pointCount: ctLine.pointCount,
+      };
+    }
+    if (metrics.pingCt == null && metrics.lossCt == null) return null;
+    const value = metrics.pingCt;
+    const loss = metrics.lossCt;
+    const time = metrics.updatedAt > 0 ? metrics.updatedAt : Date.now();
+    return {
+      client: uuid,
+      isAssigned: true,
+      loadState: "ready",
+      lastValue: value,
+      samples: [{
+        time,
+        value: value ?? null,
+        count: 1,
+        loss: loss ?? undefined,
+      }],
+      max: Math.max(1, value ?? 1),
+      loss,
+      metricIntervalMs: 60_000,
+    };
+  }, [includeCtPing, metrics, realPingLines, uuid]);
+  const ctPingBuckets = useMemo(
+    () => (ctPing ? buildPingBuckets(ctPing, pingBucketCount, bucketNow) : EMPTY_PING_BUCKETS),
+    [bucketNow, ctPing, pingBucketCount],
+  );
+  const displayPing = ctPing ?? ping;
+  const displayPingBuckets = ctPing ? ctPingBuckets : pingBuckets;
+  const displayPingModel = useMemo(
+    () => ({
+      latencyColor: latencyHeatColor(displayPing.lastValue),
+      lossColor: lossHeatColor(displayPing.loss),
+      hasRealHomepagePingBinding: ctPing ? true : hasRealHomepagePingBinding,
+      hasHomepagePingBinding: ctPing ? true : hasRealHomepagePingBinding,
+      shouldRenderPingBars: ctPing ? true : shouldRenderPingBars,
+      pingLoading: ctPing ? false : pingLoading,
+      pingError: ctPing ? false : pingError,
+    }),
+    [
+      ctPing,
+      displayPing.lastValue,
+      displayPing.loss,
+      hasRealHomepagePingBinding,
+      pingError,
+      pingLoading,
+      shouldRenderPingBars,
+    ],
+  );
 
   const metaModel = useMemo(() => {
     if (!meta) return null;
@@ -203,7 +257,11 @@ export function useNodeCardModel(
         trafficTrend,
         ping,
         pingBuckets,
+        displayPing,
+        displayPingBuckets,
         homepagePingLines,
+        ctPing,
+        ctPingBuckets,
       };
     }
 
@@ -237,10 +295,14 @@ export function useNodeCardModel(
       trafficTrend,
       ping,
       pingBuckets,
+      displayPing,
+      displayPingBuckets,
       homepagePingLines,
+      ctPing,
+      ctPingBuckets,
       traffic,
       ...metaModel,
-      ...pingModel,
+      ...(includeCtPing ? displayPingModel : pingModel),
       uptime: formatUptimeDays(metrics.uptime),
       loadFraction: Math.max(0, Math.min(1, metrics.load1 / loadBaseline)),
       upRate: formatByteRate(metrics.netUp),
@@ -251,6 +313,12 @@ export function useNodeCardModel(
     };
   }, [
     homepagePingLines,
+    ctPing,
+    ctPingBuckets,
+    displayPing,
+    displayPingBuckets,
+    displayPingModel,
+    includeCtPing,
     meta,
     metrics,
     metaModel,

@@ -7,10 +7,10 @@ import {
   useHomeNodeSummaries,
   useNodeStoreStatus,
 } from "@/hooks/useNode";
-import { useHomepagePingOverview } from "@/hooks/usePingOverview";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { useViewMode } from "@/hooks/useViewMode";
+import { useSecondClock } from "@/hooks/useClock";
 import {
   formatBytes,
   formatByteRate,
@@ -351,8 +351,6 @@ export function NodeGrid() {
       : themeSettings.homeSortDirection;
   const [selectedGroup, setSelectedGroup] = useState(HOME_ALL_GROUP);
   const [selectedRegion, setSelectedRegion] = useState(HOME_ALL_REGION);
-  useHomepagePingOverview(mode);
-
   // 摘要不含名称，先从完整 meta 解析主题隐藏列表，再统一过滤各类数据。
   const hiddenUuids = useHiddenNodeUuids();
   const visibleNodes = useMemo(
@@ -377,20 +375,31 @@ export function NodeGrid() {
     for (const node of visibleMeta) map.set(node.uuid, node.name?.trim() || node.uuid);
     return map;
   }, [visibleMeta]);
+  const showHomeOverview = themeSettings.isReady && themeSettings.showHomeOverview;
+  const latestVisibleNodesRef = useRef(visibleNodes);
+  useEffect(() => {
+    latestVisibleNodesRef.current = visibleNodes;
+  }, [visibleNodes]);
+  const bandwidthTick = useSecondClock(showHomeOverview);
+  const sampledBandwidth = useMemo(() => {
+    let netUp = 0;
+    let netDown = 0;
+    for (const node of latestVisibleNodesRef.current) {
+      netUp += node.netUp;
+      netDown += node.netDown;
+    }
+    return { netUp, netDown };
+  }, [bandwidthTick]);
   const overview = useMemo<HomeOverview>(() => {
     let onlineNodes = 0;
     let offlineNodes = 0;
     let trafficUp = 0;
     let trafficDown = 0;
-    let netUp = 0;
-    let netDown = 0;
     for (const node of visibleNodes) {
       if (node.online === true) onlineNodes += 1;
       else if (node.online === false) offlineNodes += 1;
       trafficUp += node.trafficUp;
       trafficDown += node.trafficDown;
-      netUp += node.netUp;
-      netDown += node.netDown;
     }
 
     return {
@@ -399,11 +408,10 @@ export function NodeGrid() {
       offlineNodes,
       trafficUp,
       trafficDown,
-      netUp,
-      netDown,
+      netUp: sampledBandwidth.netUp,
+      netDown: sampledBandwidth.netDown,
     };
-  }, [visibleNodes]);
-  const showHomeOverview = themeSettings.isReady && themeSettings.showHomeOverview;
+  }, [sampledBandwidth.netDown, sampledBandwidth.netUp, visibleNodes]);
   const homeOverviewCollapsible =
     showHomeOverview && themeSettings.isReady && themeSettings.homeOverviewCollapsible;
   const { expanded: overviewExpanded, toggle: toggleOverviewExpanded } =

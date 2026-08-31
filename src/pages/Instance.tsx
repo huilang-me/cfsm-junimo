@@ -6,15 +6,12 @@ import { InstanceDetails } from "@/components/instance/InstanceDetails";
 import { PingChart } from "@/components/instance/PingChart";
 import { LoadChart } from "@/components/instance/LoadChart";
 import { Spinner } from "@/components/ui/Spinner";
-import {
-  buildLoadTimeRangeOptions,
-  buildPingTimeRangeOptions,
-} from "@/components/instance/chartShared";
+import { buildLoadTimeRangeOptions } from "@/components/instance/chartShared";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useNodeMeta, useNodeStoreStatus } from "@/hooks/useNode";
+import { useInstanceHistory } from "@/hooks/useRecords";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 
-const DEFAULT_PING_HOURS = 0;
 type TimeRangeOption = ReturnType<typeof buildLoadTimeRangeOptions>[number];
 
 function RangeSelector({
@@ -27,7 +24,7 @@ function RangeSelector({
   onChange: (value: number) => void;
 }) {
   return (
-    <div className="instance-segmented is-scrollable">
+    <div className="instance-range-selector is-scrollable">
       {ranges.map((range) => (
         <button
           key={range.value}
@@ -49,10 +46,10 @@ export function Instance() {
   const themeSettings = useThemeSettings();
   const meta = useNodeMeta(uuid ?? "", "node");
   const storeStatus = useNodeStoreStatus(Boolean(uuid), "node", uuid ?? "");
-  const [chartType, setChartType] = useState<"load" | "ping">("load");
   const [loadHours, setLoadHours] = useState(0);
-  const [pingHours, setPingHours] = useState(DEFAULT_PING_HOURS);
   const chartControlsRef = useRef<HTMLDivElement | null>(null);
+  const historyHours = loadHours === 0 ? 0.167 : loadHours;
+  const historyQuery = useInstanceHistory(uuid ?? "", historyHours, Boolean(uuid && meta));
 
   const metricRetentionHours =
     config?.metric_retention_days && config.metric_retention_days > 0
@@ -63,11 +60,31 @@ export function Instance() {
     () => buildLoadTimeRangeOptions(metricRetentionHours ?? config?.record_preserve_time),
     [config?.record_preserve_time, metricRetentionHours],
   );
-  const pingRanges = useMemo(
-    () => buildPingTimeRangeOptions(metricRetentionHours ?? config?.ping_record_preserve_time),
-    [config?.ping_record_preserve_time, metricRetentionHours],
-  );
   const showPingChart = themeSettings.isReady && themeSettings.showPingChart;
+  const loadHistoryQuery = useMemo(
+    () => ({
+      data: historyQuery.data?.load,
+      isError: historyQuery.isError,
+      isFetching: historyQuery.isFetching,
+      isLoading: historyQuery.isLoading,
+      refetch: () => {
+        void historyQuery.refetch();
+      },
+    }),
+    [historyQuery],
+  );
+  const pingHistoryQuery = useMemo(
+    () => ({
+      data: historyQuery.data?.ping,
+      isError: historyQuery.isError,
+      isFetching: historyQuery.isFetching,
+      isLoading: historyQuery.isLoading,
+      refetch: () => {
+        void historyQuery.refetch();
+      },
+    }),
+    [historyQuery],
+  );
 
   const alignCharts = useCallback(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -85,22 +102,6 @@ export function Instance() {
       setLoadHours(loadRanges[0]?.value ?? 0);
     }
   }, [loadHours, loadRanges]);
-
-  useEffect(() => {
-    if (!pingRanges.some((range) => range.value === pingHours)) {
-      setPingHours(
-        pingRanges.find((range) => range.value === DEFAULT_PING_HOURS)?.value ??
-          pingRanges[0]?.value ??
-          DEFAULT_PING_HOURS,
-      );
-    }
-  }, [pingHours, pingRanges]);
-
-  useEffect(() => {
-    if (!showPingChart && chartType === "ping") {
-      setChartType("load");
-    }
-  }, [chartType, showPingChart]);
 
   if (!uuid) return null;
 
@@ -143,66 +144,17 @@ export function Instance() {
       </Link>
       <InstanceDetails uuid={uuid} onNodeReady={alignCharts} />
       <div ref={chartControlsRef} className="instance-chart-controls">
-        <div className="instance-segmented">
-          <button
-            type="button"
-            data-active={chartType === "load" ? "true" : "false"}
-            aria-pressed={chartType === "load"}
-            onClick={() => {
-              startTransition(() => setChartType("load"));
-            }}
-          >
-            负载
-          </button>
-          {showPingChart && (
-            <button
-              type="button"
-              data-active={chartType === "ping" ? "true" : "false"}
-              aria-pressed={chartType === "ping"}
-              onClick={() => {
-                startTransition(() => setChartType("ping"));
-              }}
-            >
-              Ping
-            </button>
-          )}
-        </div>
-        {chartType === "load" && (
-          <RangeSelector
-            ranges={loadRanges}
-            value={loadHours}
-            onChange={(value) => startTransition(() => setLoadHours(value))}
-          />
-        )}
-        {chartType === "ping" && showPingChart && (
-          <RangeSelector
-            ranges={pingRanges}
-            value={pingHours}
-            onChange={(value) => startTransition(() => setPingHours(value))}
-          />
-        )}
+        <RangeSelector
+          ranges={loadRanges}
+          value={loadHours}
+          onChange={(value) => startTransition(() => setLoadHours(value))}
+        />
       </div>
       <div className="instance-chart-stage">
-        <div
-          className="instance-chart-view"
-          hidden={chartType !== "load"}
-          aria-hidden={chartType !== "load"}
-        >
-          <LoadChart uuid={uuid} hours={loadHours} active={chartType === "load"} />
-        </div>
-        <div
-          className="instance-chart-view"
-          hidden={chartType !== "ping"}
-          aria-hidden={chartType !== "ping"}
-        >
-          {showPingChart ? (
-            <PingChart
-              uuid={uuid}
-              hours={pingHours}
-              active={chartType === "ping"}
-            />
-          ) : null}
-        </div>
+        <LoadChart uuid={uuid} hours={loadHours} historyQuery={loadHistoryQuery} />
+        {showPingChart ? (
+          <PingChart uuid={uuid} hours={loadHours} historyQuery={pingHistoryQuery} />
+        ) : null}
       </div>
     </div>
   );

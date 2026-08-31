@@ -409,6 +409,7 @@ export const MiniNodeCard = memo(function MiniNodeCard({
 }) {
   const model = useNodeCardModel(uuid, {
     pingBucketCount: HEALTH_BAR_COUNT,
+    includeCtPing: true,
   });
   const themeSettings = useThemeSettings();
 
@@ -418,8 +419,8 @@ export const MiniNodeCard = memo(function MiniNodeCard({
 
   const {
     node,
-    ping,
-    pingBuckets,
+    displayPing,
+    displayPingBuckets,
     footerTags,
     renewalPrice,
     latencyColor,
@@ -456,8 +457,8 @@ export const MiniNodeCard = memo(function MiniNodeCard({
       <MiniVitals node={node} loadFraction={loadFraction} />
       <MiniFlow node={node} upRate={upRate} downRate={downRate} />
       <MiniHealth
-        ping={ping}
-        pingBuckets={pingBuckets}
+        ping={displayPing}
+        pingBuckets={displayPingBuckets}
         latencyColor={latencyColor}
         lossColor={lossColor}
         hasRealHomepagePingBinding={hasRealHomepagePingBinding}

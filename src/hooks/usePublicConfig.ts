@@ -7,8 +7,13 @@ export const CONFIG_QUERY_KEY = ["config"] as const;
 export function usePublicConfig() {
   return useQuery<Record<string, unknown>, Error, PublicConfig>({
     queryKey: CONFIG_QUERY_KEY,
-    queryFn: ({ signal }) => getConfig({ signal }),
+    queryFn: () => getConfig(),
     select: mapConfigToPublic,
-    staleTime: 60_000,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
   });
 }

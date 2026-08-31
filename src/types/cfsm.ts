@@ -96,6 +96,7 @@ export interface NodeRealtime {
   lossCu?: number | null;
   lossCm?: number | null;
   lossBd?: number | null;
+  homepagePingLines?: HomepagePingLine[];
 }
 
 /** 展示用模型:扁平化的节点信息 + 实时指标 + 在线标志。 */
@@ -137,6 +138,7 @@ export interface NodeMetrics {
   lossCu: number | null;
   lossCm: number | null;
   lossBd: number | null;
+  homepagePingLines?: HomepagePingLine[];
 }
 
 /**
@@ -287,7 +289,7 @@ export const PingRecordSchema = z
   .object({
     task_id: z.number(),
     time: z.union([z.string(), z.number()]),
-    value: z.number(),
+    value: z.number().nullable(),
     client: z.string().default(""),
     count: z.number().optional(),
     loss: z.number().nullable().optional(),
@@ -370,7 +372,7 @@ export interface PingOverviewItem {
   pointCount?: number;
   samples: Array<{
     time: number;
-    value: number;
+    value: number | null;
     /** 聚合 metric 点覆盖的原始样本数。 */
     count?: number;
     /** 聚合窗口的丢包百分比。 */

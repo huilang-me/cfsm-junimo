@@ -1,4 +1,4 @@
-﻿import type { NodeInfo, NodeMetrics, NodeRealtime, TrafficTrendSample } from "@/types/cfsm";
+﻿import type { HomepagePingLine, NodeInfo, NodeMetrics, NodeRealtime, TrafficTrendSample } from "@/types/cfsm";
 import {
   getApiBases,
   getNodeSnapshot,
@@ -7,7 +7,11 @@ import {
   mapServerToLatestRecord,
   mapServerToNodeInfo,
 } from "@/services/api";
-import { parseGpuUtil, parseProbeMetricValue } from "@/utils/cfsmProbeMetrics";
+import {
+  HOMEPAGE_CFSM_PROBE_DEFS,
+  parseGpuUtil,
+  parseProbeMetricValue,
+} from "@/utils/cfsmProbeMetrics";
 
 type Listener = () => void;
 type RealtimePayload = Record<string, unknown>;
@@ -163,18 +167,6 @@ function alignEmptyMetricsTotals(metrics: NodeMetrics, info: NodeInfo): NodeMetr
   };
 }
 
-// 累计流量直接跟随后端计数器下降；0 视为本帧缺样，避免局部帧闪零。
-export function resolveTrafficTotal(previous: number, raw: number): number {
-  return Number.isFinite(raw) && raw > 0 ? raw : previous;
-}
-
-function resolveTrafficTotals(previous: NodeMetrics, nextUp: number, nextDown: number) {
-  return {
-    up: resolveTrafficTotal(previous.trafficUp, nextUp),
-    down: resolveTrafficTotal(previous.trafficDown, nextDown),
-  };
-}
-
 function mergeRealtime(
   metrics: NodeMetrics,
   rt: NodeRealtime,
@@ -187,11 +179,6 @@ function mergeRealtime(
   const diskUsed = rt.disk.used;
   const diskTotal = rt.disk.total;
   const updatedAt = toTimestamp(rt.updated_at);
-  const trafficTotals = resolveTrafficTotals(
-    metrics,
-    rt.network?.totalUp ?? 0,
-    rt.network?.totalDown ?? 0,
-  );
 
   return {
     online,
@@ -206,8 +193,8 @@ function mergeRealtime(
     diskPct: diskTotal > 0 ? (diskUsed / diskTotal) * 100 : 0,
     netUp: rt.network?.up ?? 0,
     netDown: rt.network?.down ?? 0,
-    trafficUp: trafficTotals.up,
-    trafficDown: trafficTotals.down,
+    trafficUp: metrics.trafficUp,
+    trafficDown: metrics.trafficDown,
     uptime: rt.uptime ?? 0,
     load1: rt.load?.load1 ?? 0,
     load5: rt.load?.load5 ?? 0,
@@ -231,6 +218,7 @@ function mergeRealtime(
     lossCu: rt.lossCu !== undefined ? rt.lossCu : metrics.lossCu,
     lossCm: rt.lossCm !== undefined ? rt.lossCm : metrics.lossCm,
     lossBd: rt.lossBd !== undefined ? rt.lossBd : metrics.lossBd,
+    homepagePingLines: rt.homepagePingLines !== undefined ? rt.homepagePingLines : metrics.homepagePingLines,
   };
 }
 
@@ -272,7 +260,8 @@ function shallowEqualMetrics(a: NodeMetrics, b: NodeMetrics) {
     a.lossCt === b.lossCt &&
     a.lossCu === b.lossCu &&
     a.lossCm === b.lossCm &&
-    a.lossBd === b.lossBd
+    a.lossBd === b.lossBd &&
+    a.homepagePingLines === b.homepagePingLines
   );
 }
 
@@ -581,6 +570,66 @@ function pickDiskIoMetric(payload: RealtimePayload, disk: RealtimePayload, flatK
   return undefined;
 }
 
+function readHomepageProbePoint(point: unknown, key: string) {
+  const record = asRecord(point);
+  return Object.prototype.hasOwnProperty.call(record, key)
+    ? parseProbeMetricValue(record[key])
+    : null;
+}
+
+function buildHomepagePingLines(payload: RealtimePayload, uuid: string): HomepagePingLine[] | undefined {
+  const pingPoints = Array.isArray(payload.ping) ? payload.ping : [];
+  const lossPoints = Array.isArray(payload.loss) ? payload.loss : [];
+  const pointCount = Math.max(pingPoints.length, lossPoints.length);
+  if (pointCount === 0) return undefined;
+
+  return HOMEPAGE_CFSM_PROBE_DEFS.map((def) => {
+    const samples: HomepagePingLine["samples"] = Array.from({ length: pointCount }, (_, index) => {
+      const pingPoint = asRecord(pingPoints[index]);
+      const lossPoint = asRecord(lossPoints[index]);
+      const time = toTimestamp(
+        (pingPoint.ts ?? lossPoint.ts ?? pingPoint.time ?? lossPoint.time ?? pingPoint.timestamp ?? lossPoint.timestamp) as
+          | string
+          | number
+          | undefined,
+      );
+      return {
+        time,
+        value: readHomepageProbePoint(pingPoint, def.windowKey),
+        count: 1,
+        loss: readHomepageProbePoint(lossPoint, def.windowKey),
+      };
+    });
+    const latest = [...samples].reverse().find(
+      (sample) => typeof sample.value === "number" && Number.isFinite(sample.value),
+    )?.value ?? null;
+    const latestLoss = [...samples].reverse().find(
+      (sample) => typeof sample.loss === "number" && Number.isFinite(sample.loss),
+    )?.loss ?? null;
+    const max =
+      samples.reduce(
+        (value, sample) =>
+          typeof sample.value === "number" && Number.isFinite(sample.value)
+            ? Math.max(value, sample.value)
+            : value,
+        1,
+      );
+
+    return {
+      taskId: def.id,
+      taskName: def.name,
+      client: uuid,
+      isAssigned: true,
+      loadState: "ready",
+      lastValue: latest,
+      pointCount,
+      samples,
+      max,
+      loss: latestLoss,
+    };
+  });
+}
+
 // 旧扁平协议的 connections 是 TCP+UDP 合计。
 export function resolveFlatConnectionsTcp(payload: RealtimePayload): number {
   if (payload.connections_tcp != null) return asNumber(payload.connections_tcp);
@@ -609,6 +658,7 @@ function normalizeRealtime(
     Object.keys(network).length > 0;
 
   if (hasNestedShape) {
+    const homepagePingLines = buildHomepagePingLines(payload, meta.uuid);
     return {
       cpu: { usage: asNumber(cpu.usage) },
       ram: {
@@ -658,10 +708,12 @@ function normalizeRealtime(
       lossCu: pickProbeMetric(payload, "loss_cu"),
       lossCm: pickProbeMetric(payload, "loss_cm"),
       lossBd: pickProbeMetric(payload, "loss_bd"),
+      homepagePingLines,
     };
   }
 
   const [load1, load5, load15] = parseLoadTriplet(payload.load_avg ?? payload.load);
+  const homepagePingLines = buildHomepagePingLines(payload, meta.uuid);
 
   return {
     cpu: { usage: asNumber(payload.cpu) },
@@ -685,8 +737,8 @@ function normalizeRealtime(
     network: {
       up: pickNumber(payload, ["net_out_speed", "net_out"]),
       down: pickNumber(payload, ["net_in_speed", "net_in"]),
-      totalUp: pickNumber(payload, ["net_tx_monthly", "net_tx", "net_total_up"]),
-      totalDown: pickNumber(payload, ["net_rx_monthly", "net_rx", "net_total_down"]),
+      totalUp: pickNumber(payload, ["net_tx", "net_total_up", "net_tx_monthly"]),
+      totalDown: pickNumber(payload, ["net_rx", "net_total_down", "net_rx_monthly"]),
     },
     connections: {
       tcp: resolveFlatConnectionsTcp(payload),
@@ -715,6 +767,7 @@ function normalizeRealtime(
     lossCu: pickProbeMetric(payload, "loss_cu"),
     lossCm: pickProbeMetric(payload, "loss_cm"),
     lossBd: pickProbeMetric(payload, "loss_bd"),
+    homepagePingLines,
   };
 }
 
@@ -730,11 +783,19 @@ function applyLatestStatus(records: Record<string, unknown>) {
     const prev = state.metricsByUuid[uuid];
     if (!meta || !prev) continue;
     const rawRecord = records[uuid];
+    const rawPayload = asRecord(rawRecord);
     const online = resolveOnline(rawRecord);
     const realtime = normalizeRealtime(rawRecord, meta, prev);
-    const merged = realtime
+    const mergedRealtime = realtime
       ? mergeRealtime(prev, realtime, online)
       : { ...prev, online };
+    const merged = rawPayload.__cfsmServerSnapshot === true
+      ? {
+          ...mergedRealtime,
+          trafficUp: asNumber(rawPayload.net_total_up, prev.trafficUp),
+          trafficDown: asNumber(rawPayload.net_total_down, prev.trafficDown),
+        }
+      : mergedRealtime;
 
     if (!shallowEqualMetrics(prev, merged)) {
       if (nextMetricsByUuid === state.metricsByUuid) {
@@ -1028,6 +1089,18 @@ function buildLiveSocketUrl(baseUrl: string, subscribe: string) {
   return url;
 }
 
+function buildLiveSocketSubscribeMessage(baseIndex: number, subscribe: string) {
+  if (subscribe === "all") {
+    const ids = state.order.filter((uuid) => {
+      const meta = state.metaByUuid[uuid] as (NodeInfo & { __cfsmBaseIndex?: number }) | undefined;
+      return meta && (meta.__cfsmBaseIndex == null || meta.__cfsmBaseIndex === baseIndex);
+    });
+    return { type: "subscribe", scope: "all", ids };
+  }
+
+  return { type: "subscribe", scope: subscribe, ids: [] };
+}
+
 function extractServerSnapshots(
   message: unknown,
   baseIndex: number,
@@ -1133,13 +1206,7 @@ function openLiveSocket(baseIndex: number, subscribe: string) {
 
     socket.addEventListener("open", () => {
       if (!socket || stopped) return;
-      socket.send(
-        JSON.stringify(
-          subscribe === "all"
-            ? { type: "subscribe", scope: "all" }
-            : { type: "subscribe", scope: "server", id: subscribe, ids: [subscribe] },
-        ),
-      );
+      socket.send(JSON.stringify(buildLiveSocketSubscribeMessage(baseIndex, subscribe)));
     });
 
     socket.addEventListener("message", (event) => {
@@ -1262,8 +1329,6 @@ export function retainNodeStore(uuid: string) {
       nodeRetainCounts.set(uuid, count);
     } else {
       nodeRetainCounts.delete(uuid);
-      nodeInfoControllers.get(uuid)?.abort();
-      nodeInfoControllers.delete(uuid);
       startLiveSockets();
     }
     releaseRetain();

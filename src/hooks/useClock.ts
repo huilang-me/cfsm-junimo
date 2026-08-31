@@ -57,6 +57,7 @@ function createClockStore(intervalMs: number): ClockStore {
 }
 
 const NOOP_SUBSCRIBE = () => () => undefined;
+const SECOND_CLOCK = createClockStore(1_000);
 const MINUTE_CLOCK = createClockStore(60_000);
 const HOUR_CLOCK = createClockStore(3_600_000);
 
@@ -70,6 +71,10 @@ function useClock(store: ClockStore, enabled: boolean) {
 
 export function useMinuteClock(enabled = true) {
   return useClock(MINUTE_CLOCK, enabled);
+}
+
+export function useSecondClock(enabled = true) {
+  return useClock(SECOND_CLOCK, enabled);
 }
 
 export function useHourlyClock(enabled = true) {
