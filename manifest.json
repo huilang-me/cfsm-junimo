@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "CF-Server-Monitor",
+  "short_name": "CFSM",
+  "description": "CF-Server-Monitor theme.",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "purpose": "any"
+    }
+  ]
+}
