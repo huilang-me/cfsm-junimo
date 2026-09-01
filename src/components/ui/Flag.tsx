@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getApiStaticAssetUrl } from "@/utils/apiBase";
 import { getDisplayRegionCode } from "@/utils/geo";
 
 interface FlagProps {
@@ -25,7 +26,7 @@ export function Flag({ region, size = 14 }: FlagProps) {
   }
 
   const flagCode = getDisplayRegionCode(value);
-  const src = `/flags/${flagCode.toLowerCase()}.svg`;
+  const src = getApiStaticAssetUrl(`/flags/${flagCode.toLowerCase()}.svg`);
   const alt = `地区旗帜: ${flagCode}`;
 
   if (failedSrc === src) {

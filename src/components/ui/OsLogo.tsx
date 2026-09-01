@@ -1,4 +1,5 @@
 import { memo, useState } from "react";
+import { getApiStaticAssetUrl } from "@/utils/apiBase";
 
 interface OsConfig {
   name: string;
@@ -223,7 +224,8 @@ export const OsLogo = memo(function OsLogo({
 }) {
   const os = resolveOsInfo(value);
   const [failedImage, setFailedImage] = useState<string | null>(null);
-  const src = failedImage === os.image ? DEFAULT_OS_CONFIG.image : os.image;
+  const image = failedImage === os.image ? DEFAULT_OS_CONFIG.image : os.image;
+  const src = getApiStaticAssetUrl(image);
 
   return (
     <img
@@ -236,7 +238,7 @@ export const OsLogo = memo(function OsLogo({
       loading="lazy"
       draggable={false}
       onError={() => {
-        if (src !== DEFAULT_OS_CONFIG.image) setFailedImage(os.image);
+        if (image !== DEFAULT_OS_CONFIG.image) setFailedImage(os.image);
       }}
       style={{ "--os-logo-size": `${size}px` } as React.CSSProperties}
     />

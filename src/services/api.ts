@@ -15,6 +15,9 @@ import {
   clampLossPercent,
   parseProbeMetricValue,
 } from "@/utils/cfsmProbeMetrics";
+import { getApiBases } from "@/utils/apiBase";
+
+export { getApiBases } from "@/utils/apiBase";
 
 const DEFAULT_API_TIMEOUT_MS = 12_000;
 const ONLINE_THRESHOLD_MS = 5 * 60 * 1000;
@@ -83,19 +86,6 @@ export function warnDegradedOnce(key: string, message: string) {
   console.warn(`[cfsm-junimo] ${message}`);
 }
 
-function stripTrailingSlash(value: string) {
-  return value.replace(/\/+$/, "");
-}
-
-export function getApiBases(): string[] {
-  const metaApiBase = document.querySelector<HTMLMetaElement>('meta[name="apiBase"]')?.content;
-  const bases = metaApiBase
-    ?.split(",")
-    .map((item) => stripTrailingSlash(item.trim()))
-    .filter(Boolean);
-  return bases && bases.length > 0 ? bases : [stripTrailingSlash(window.location.origin)];
-}
-
 export function getWsBase(baseUrl: string) {
   const url = new URL(baseUrl || window.location.origin, window.location.origin);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
@@ -147,7 +137,7 @@ async function requestJson<T>(
 ): Promise<CfsmFetchResult<T>> {
   const bases = getApiBases();
   const baseIndex = options.baseIndex ?? 0;
-  const baseUrl = bases[baseIndex] ?? bases[0] ?? stripTrailingSlash(window.location.origin);
+  const baseUrl = bases[baseIndex] ?? bases[0] ?? window.location.origin;
   const controller = new AbortController();
   const timeout = window.setTimeout(
     () => controller.abort(new DOMException("Request timed out", "TimeoutError")),
