@@ -256,9 +256,9 @@ export function useNodeCardModel(
   );
 
   const isOffline = metrics?.online === false;
-  // 离线时长需要随时间推进,但离线后 metrics 停更、memo 不再重算。
-  // 离线时订阅模块级分钟钟(共享一个 timer),驱动时长文本每分钟刷新;在线零开销。
-  useMinuteClock(isOffline);
+  const hasBootTime = (metrics?.bootTime ?? 0) > 0;
+  // 在线时长从 boot_time 推导,离线时长也需要随时间推进；两者都用共享分钟钟驱动展示刷新。
+  const uptimeNow = useMinuteClock((metrics?.online === true && hasBootTime) || isOffline);
 
   return useMemo(() => {
     if (!meta || !metrics || !metaModel) {
@@ -277,6 +277,10 @@ export function useNodeCardModel(
     }
 
     const { loadBaseline } = metaModel;
+    const uptimeSeconds =
+      metrics.online === true && metrics.bootTime > 0
+        ? Math.max(0, (uptimeNow - metrics.bootTime) / 1000)
+        : metrics.uptime;
 
     // 流量配额：按节点的 traffic_limit_type（与后端一致）把累计上/下行算成"已用"，
     // 在这里一次性算出剩余和使用占比，让两种卡片布局共用这套计算。
@@ -315,7 +319,7 @@ export function useNodeCardModel(
       traffic,
       ...metaModel,
       ...(includeCtPing ? displayPingModel : pingModel),
-      uptime: formatUptimeDays(metrics.uptime),
+      uptime: formatUptimeDays(uptimeSeconds),
       loadFraction: Math.max(0, Math.min(1, metrics.load1 / loadBaseline)),
       upRate: formatByteRate(metrics.netUp),
       downRate: formatByteRate(metrics.netDown),
@@ -339,5 +343,6 @@ export function useNodeCardModel(
     pingBuckets,
     shouldRenderHealthSection,
     trafficTrend,
+    uptimeNow,
   ]);
 }

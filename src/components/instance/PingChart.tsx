@@ -2,7 +2,6 @@
 import UplotReact from "uplot-react";
 import type uPlot from "uplot";
 import { Eye, EyeOff } from "lucide-react";
-import { usePingRecords } from "@/hooks/useRecords";
 import { InstancePanel, InstanceChartLoading } from "./InstancePanel";
 import {
   buildChartTooltipHooks,
@@ -24,7 +23,6 @@ import {
 import { latencyHeatColor, lossHeatColor } from "@/utils/metricTone";
 import { historyCoverageLabel } from "@/utils/historyRange";
 import { resolvePingChartInterval, resolvePingSampleCounts } from "@/utils/pingMetrics";
-import { usePreferences } from "@/hooks/usePreferences";
 import { useNodeMetrics } from "@/hooks/useNode";
 import { CFSM_PROBE_DEFS, clampLossPercent } from "@/utils/cfsmProbeMetrics";
 import type { NodeMetrics, PingRecord, PingRecordsResponse, PingTask, PingTaskStats } from "@/types/cfsm";
@@ -109,7 +107,6 @@ export function summarizePingRecords(records: PingRecord[]) {
 
 const EMPTY_PING_STATS: PingTaskStats[] = [];
 const MAX_RENDER_POINTS = 160;
-const REALTIME_HISTORY_HOURS = 0.167;
 const REALTIME_WINDOW_SECONDS = 10 * 60;
 const REALTIME_RECORD_LIMIT = 2400;
 // 1 即关闭平滑(smoothByCount 对 <=1 原样返回);保留常量便于调参,非削峰模式当前不平滑。
@@ -151,7 +148,6 @@ function PingMetricFigure({
   hiddenTasks,
   data,
   requestedXRange,
-  isDark,
   connectNulls,
   cutPeak,
 }: {
@@ -168,9 +164,8 @@ function PingMetricFigure({
   taskIndexById: Map<number, number>;
   visibleTasks: PingTask[];
   hiddenTasks: Set<number>;
-  data: ReturnType<typeof usePingRecords>["data"];
+  data: PingRecordsResponse | undefined;
   requestedXRange: [number, number] | null | undefined;
-  isDark: boolean;
   connectNulls: boolean;
   cutPeak: boolean;
 }) {
@@ -254,7 +249,7 @@ function PingMetricFigure({
   const hasChart = Boolean(chart);
   const baseOptions = useMemo<Omit<uPlot.Options, "width" | "height"> | null>(() => {
     if (!hasChart) return null;
-    const { grid, text } = getAxisColors(isDark);
+    const { grid, text } = getAxisColors();
     const tooltipHooks = buildChartTooltipHooks({
       dataRef: chartRef,
       rangeHours: hours,
@@ -334,7 +329,7 @@ function PingMetricFigure({
         setCursor: [tooltipHooks.onSetCursor],
       },
     };
-  }, [connectNulls, hasChart, hiddenTasks, hours, isDark, isLoss, requestedXRange, taskColors, taskIndexById, taskLabels, tasks, title, visibleTasks]);
+  }, [connectNulls, hasChart, hiddenTasks, hours, isLoss, requestedXRange, taskColors, taskIndexById, taskLabels, tasks, title, visibleTasks]);
 
   const options = useMemo<uPlot.Options | null>(
     () => (baseOptions ? { ...baseOptions, width: w, height: h } : null),
@@ -371,7 +366,7 @@ export function PingChart({
   uuid: string;
   hours: number;
   active?: boolean;
-  historyQuery?: {
+  historyQuery: {
     data?: PingRecordsResponse;
     isError: boolean;
     isFetching: boolean;
@@ -380,24 +375,20 @@ export function PingChart({
   };
 }) {
   const isRealtime = hours === 0;
-  const queryHours = isRealtime ? REALTIME_HISTORY_HOURS : hours;
-  const ownQuery = usePingRecords(uuid, queryHours, active && !historyQuery);
   const {
     data,
     isError,
     isFetching,
     isLoading,
     refetch: refetchRecords,
-  } = historyQuery ?? ownQuery;
-  // stats 随 records 同一次请求返回(getPingRecords includeStats),不再单独发起查询。
+  } = historyQuery;
+  // stats 随详情历史同一次请求返回,不再单独发起 Ping 查询。
   const pingStats = data?.stats ?? EMPTY_PING_STATS;
   const node = useNodeMetrics(uuid, isRealtime && active, "node");
-  const { resolvedAppearance } = usePreferences();
   const [hiddenTasks, setHiddenTasks] = useState<Set<number>>(new Set());
   const [connectNulls, setConnectNulls] = useState(false);
   const [cutPeak, setCutPeak] = useState(false);
   const [realtimeRecords, setRealtimeRecords] = useState<PingRecord[]>([]);
-  const isDark = resolvedAppearance === "dark";
   const realtimeTaskIdsKey = useMemo(() => {
     if ((data?.tasks?.length ?? 0) > 0 || !isRealtime || realtimeRecords.length === 0) return "";
     return Array.from(new Set(realtimeRecords.map((record) => record.task_id)))
@@ -719,7 +710,6 @@ export function PingChart({
           hiddenTasks={hiddenTasks}
           data={data}
           requestedXRange={requestedXRange}
-          isDark={isDark}
           connectNulls={connectNulls}
           cutPeak={cutPeak}
         />
@@ -739,7 +729,6 @@ export function PingChart({
           hiddenTasks={hiddenTasks}
           data={data}
           requestedXRange={requestedXRange}
-          isDark={isDark}
           connectNulls={connectNulls}
           cutPeak={cutPeak}
         />

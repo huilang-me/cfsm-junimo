@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "./tokens.css";
 @import "./surface.css";
 @import "./home.css";
 @import "./node-card.css";
@@ -20,7 +19,7 @@
 }
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 
   /* 卡片表面不透明度(0–100),由背景「卡片不透明度」设置驱动。默认 100 → --surface-a
      等于 --surface,在背景图调低它之前,表面与纯色主题逐像素一致。-a 系列变量才是浮层

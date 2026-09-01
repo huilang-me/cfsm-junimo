@@ -34,7 +34,7 @@ import {
   type HomepagePingTaskBindings,
 } from "@/utils/pingTasks";
 
-export type Appearance = "system" | "light" | "dark" | "farm";
+export type Appearance = "farm";
 /** farm 主题的场景：6:00–18:00 为昼，其余为夕（含夜晚）。 */
 export type FarmScene = "day" | "dusk";
 export type NodeViewMode = "large" | "compact" | "mini" | "list";
@@ -152,17 +152,6 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   surfaceOpacity: DEFAULT_SURFACE_OPACITY,
 };
 
-export function isAppearance(value: unknown): value is Appearance {
-  return value === "system" || value === "light" || value === "dark" || value === "farm";
-}
-
-function normalizeAppearance(
-  value: unknown,
-  fallback: Appearance = DEFAULT_THEME_SETTINGS.defaultAppearance,
-): Appearance {
-  return isAppearance(value) ? value : fallback;
-}
-
 export function isNodeViewMode(value: unknown): value is NodeViewMode {
   return value === "large" || value === "compact" || value === "mini" || value === "list";
 }
@@ -225,7 +214,7 @@ export function normalizeThemeSettings(
     ? normalizedHomepageMultiPingGroups
     : DEFAULT_THEME_SETTINGS.homepageMultiPingGroups;
   return {
-    defaultAppearance: normalizeAppearance(settings?.defaultAppearance),
+    defaultAppearance: DEFAULT_THEME_SETTINGS.defaultAppearance,
     desktopNodeViewMode: normalizeNodeViewMode(
       settings?.desktopNodeViewMode,
       DEFAULT_THEME_SETTINGS.desktopNodeViewMode,

@@ -234,18 +234,6 @@ body::after {
     transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-/* 外观选择与其他快捷按钮共用同一个 36px 圆形规格；分组仅保留语义，不再额外
-   包一层会把整行撑高的胶囊。 */
-.floating-controls .floating-controls-appearance {
-  flex: 0 0 auto;
-  gap: 8px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-}
-
 .floating-controls-actions .control-button,
 .floating-controls-trigger {
   width: 36px;
@@ -357,100 +345,6 @@ body::after {
 .metric-color-error {
   font-size: 11px;
   color: var(--status-offline);
-}
-
-.dark-depth-control {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  border: 1px solid var(--hairline);
-  border-radius: 11px;
-  background: var(--surface-sunken);
-  padding: 9px;
-}
-
-.dark-depth-presets {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 5px;
-}
-
-.dark-depth-preset {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  color: var(--text-tertiary);
-  padding: 6px 4px;
-  font-size: 10.5px;
-  font-weight: 620;
-  line-height: 1;
-  transition:
-    border-color 140ms ease,
-    background 140ms ease,
-    color 140ms ease;
-}
-
-.dark-depth-preset:hover {
-  background: var(--hover-bg);
-  color: var(--text-secondary);
-}
-
-.dark-depth-preset[data-active="true"] {
-  border-color: color-mix(in srgb, var(--accent-500) 42%, var(--border));
-  background: color-mix(in srgb, var(--accent-500) 9%, var(--surface-elev));
-  color: var(--text-primary);
-}
-
-.dark-depth-preset-swatch {
-  width: 12px;
-  height: 12px;
-  flex: 0 0 auto;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 4px;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.22);
-}
-
-.dark-depth-preset[data-depth="0"] .dark-depth-preset-swatch { background: #212830; }
-.dark-depth-preset[data-depth="60"] .dark-depth-preset-swatch { background: #0d1117; }
-.dark-depth-preset[data-depth="100"] .dark-depth-preset-swatch { background: #000000; }
-
-.dark-depth-range {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.dark-depth-range-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 580;
-}
-
-.dark-depth-range output {
-  color: var(--text-tertiary);
-  font-variant-numeric: tabular-nums;
-}
-
-.dark-depth-range input[type="range"] {
-  width: 100%;
-  height: 16px;
-  margin: 0;
-  cursor: pointer;
-  accent-color: var(--accent-500);
-}
-
-.dark-depth-hint {
-  margin: 0;
-  color: var(--text-tertiary);
-  font-size: 10px;
-  line-height: 1.35;
 }
 
 .metric-color-reset-all {
@@ -579,8 +473,7 @@ body::after {
 
 @media (max-width: 360px) {
   .floating-controls-row,
-  .floating-controls-actions,
-  .floating-controls .floating-controls-appearance {
+  .floating-controls-actions {
     gap: 6px;
   }
 

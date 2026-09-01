@@ -1,6 +1,5 @@
-import type { Appearance } from "@/utils/themeSettings";
-
-export type ResolvedAppearance = Exclude<Appearance, "system">;
+export type ResolvedAppearance = "farm";
+type BackgroundImageVariant = "light" | "dark";
 
 export const DEFAULT_BACKGROUND_ALIGNMENT = "cover,center";
 export const DEFAULT_SURFACE_OPACITY = 100;
@@ -36,12 +35,12 @@ export function normalizeBackgroundUrl(value: unknown): string {
 /** 从规范化的单 URL 或 `light|dark` 对中选择当前外观。 */
 export function resolveBackgroundUrl(
   raw: string,
-  appearance: ResolvedAppearance,
+  variant: BackgroundImageVariant,
 ): string {
   if (!raw) return "";
   const parts = raw.split("|").map((part) => part.trim());
   if (parts.length >= 2) {
-    return (appearance === "dark" ? parts[1] : parts[0]) ?? "";
+    return (variant === "dark" ? parts[1] : parts[0]) ?? "";
   }
   return parts[0] ?? "";
 }
@@ -158,21 +157,19 @@ const BACKGROUND_VAR_NAMES = [
 /** 将缓存写入 `<html>`，与 index.html 的首帧逻辑保持一致。 */
 export function applyBackgroundCache(
   cache: BackgroundCache | null,
-  appearance: ResolvedAppearance,
   farmScene?: "day" | "dusk" | null,
 ): void {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   // farm 主题且站长关闭了「背景图在农场主题中生效」时，等同无缓存：
   // 移除变量，让 farm.css 的程序化场景接管 body::before。
-  if (!cache || (appearance === "farm" && cache.farm === false)) {
+  if (!cache || cache.farm === false) {
     for (const name of BACKGROUND_VAR_NAMES) root.style.removeProperty(name);
     delete root.dataset.bgImage;
     return;
   }
-  // farm 的「浅色|深色」双图映射到昼/夕场景：昼用浅色图，夕用深色图。
-  const dark =
-    appearance === "dark" || (appearance === "farm" && farmScene === "dusk");
+  // 旧配置的「浅色|深色」双图映射到农场昼/夕场景：昼用浅色图，夕用深色图。
+  const dark = farmScene === "dusk";
   const desktop = dark ? cache.darkDesktop : cache.lightDesktop;
   const mobile = (dark ? cache.darkMobile : cache.lightMobile) || desktop;
   root.style.setProperty("--bg-image-desktop", desktop);

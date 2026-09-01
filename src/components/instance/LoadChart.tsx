@@ -13,7 +13,6 @@ import type uPlot from "uplot";
 import { ArrowDown, ArrowUp, Cpu, Gauge, HardDrive, MemoryStick, Network, Workflow } from "lucide-react";
 import { useLoadRecords } from "@/hooks/useRecords";
 import { useNodeMeta, useNodeMetrics } from "@/hooks/useNode";
-import type { ResolvedAppearance } from "@/utils/background";
 import { InstancePanel, InstanceChartLoading } from "./InstancePanel";
 import {
   buildChartTooltipHooks,
@@ -34,7 +33,6 @@ import {
 import { formatBytes, formatTrafficRateLabel } from "@/utils/format";
 import { historyCoverageLabel } from "@/utils/historyRange";
 import { resolveLoadRecordTotals } from "@/utils/loadMetrics";
-import { usePreferences } from "@/hooks/usePreferences";
 import { parseGpuUtil } from "@/utils/cfsmProbeMetrics";
 import type { LoadRecord, LoadRecordsResponse, NodeMetrics } from "@/types/cfsm";
 
@@ -221,7 +219,6 @@ function buildBaseOptions({
   title,
   keys,
   colors,
-  resolvedAppearance,
   rangeHours,
   spanGaps,
   axisKind,
@@ -231,15 +228,13 @@ function buildBaseOptions({
   title: string;
   keys: string[];
   colors: string[];
-  resolvedAppearance: ResolvedAppearance;
   rangeHours: number;
   spanGaps?: boolean;
   axisKind: "percent" | "network" | "count";
   axisSize?: number;
   xRange?: [number, number] | null;
 }): Omit<uPlot.Options, "width" | "height"> {
-  const isDark = resolvedAppearance === "dark";
-  const { grid, text } = getAxisColors(isDark);
+  const { grid, text } = getAxisColors();
 
   return {
     padding: [8, 12, 10, 2],
@@ -305,7 +300,6 @@ const ChartCard = memo(function ChartCard({
   points,
   keys,
   colors,
-  resolvedAppearance,
   rangeHours,
   unit = "",
   spanGaps,
@@ -321,7 +315,6 @@ const ChartCard = memo(function ChartCard({
   points: ChartPoint[];
   keys: string[];
   colors: string[];
-  resolvedAppearance: ResolvedAppearance;
   rangeHours: number;
   unit?: string;
   spanGaps?: boolean;
@@ -348,14 +341,13 @@ const ChartCard = memo(function ChartCard({
         title,
         keys,
         colors,
-        resolvedAppearance,
         rangeHours,
         spanGaps,
         axisKind,
         axisSize,
         xRange,
       }),
-    [axisKind, axisSize, colors, keys, rangeHours, resolvedAppearance, spanGaps, title, xRange],
+    [axisKind, axisSize, colors, keys, rangeHours, spanGaps, title, xRange],
   );
 
   const enhancedOptions = useMemo<Omit<uPlot.Options, "width" | "height">>(() => {
@@ -446,7 +438,6 @@ export function LoadChart({
   const isRealtime = hours === 0;
   const node = useNodeMetrics(uuid, isRealtime && active, "node");
   const meta = useNodeMeta(uuid, "node");
-  const { resolvedAppearance } = usePreferences();
   const [realtimePoints, setRealtimePoints] = useState<ChartPoint[]>([]);
   const [connectNulls, setConnectNulls] = useState(false);
   const totalFallbacks = useMemo(
@@ -631,7 +622,6 @@ export function LoadChart({
           points={points}
           keys={CPU_KEYS}
           colors={CPU_COLORS}
-          resolvedAppearance={resolvedAppearance}
           rangeHours={hours}
           unit="%"
           spanGaps={connectNulls}
@@ -661,7 +651,6 @@ export function LoadChart({
           points={points}
           keys={MEMORY_KEYS}
           colors={MEMORY_COLORS}
-          resolvedAppearance={resolvedAppearance}
           rangeHours={hours}
           unit="%"
           spanGaps={connectNulls}
@@ -683,7 +672,6 @@ export function LoadChart({
           points={points}
           keys={DISK_KEYS}
           colors={DISK_COLORS}
-          resolvedAppearance={resolvedAppearance}
           rangeHours={hours}
           unit="%"
           spanGaps={connectNulls}
@@ -710,7 +698,6 @@ export function LoadChart({
           points={points}
           keys={NETWORK_KEYS}
           colors={NETWORK_COLORS}
-          resolvedAppearance={resolvedAppearance}
           rangeHours={hours}
           spanGaps={connectNulls}
           axisKind="network"
@@ -732,7 +719,6 @@ export function LoadChart({
           points={points}
           keys={LOAD_KEYS}
           colors={LOAD_COLORS}
-          resolvedAppearance={resolvedAppearance}
           rangeHours={hours}
           spanGaps={connectNulls}
           axisKind="count"
@@ -757,7 +743,6 @@ export function LoadChart({
             points={points}
             keys={GPU_KEYS}
             colors={GPU_COLORS}
-            resolvedAppearance={resolvedAppearance}
             rangeHours={hours}
             unit="%"
             spanGaps={connectNulls}
@@ -781,7 +766,6 @@ export function LoadChart({
             points={points}
             keys={DISK_IO_KEYS}
             colors={DISK_IO_COLORS}
-            resolvedAppearance={resolvedAppearance}
             rangeHours={hours}
             spanGaps={connectNulls}
             axisKind="network"
@@ -804,7 +788,6 @@ export function LoadChart({
           points={points}
           keys={CONNECTION_KEYS}
           colors={CONNECTION_COLORS}
-          resolvedAppearance={resolvedAppearance}
           rangeHours={hours}
           spanGaps={connectNulls}
           axisKind="count"
@@ -831,7 +814,6 @@ export function LoadChart({
           points={points}
           keys={PROCESS_KEYS}
           colors={PROCESS_COLORS}
-          resolvedAppearance={resolvedAppearance}
           rangeHours={hours}
           spanGaps={connectNulls}
           axisKind="count"

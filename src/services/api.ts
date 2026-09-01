@@ -686,67 +686,27 @@ function buildPingStats(uuid: string, task: PingTask, records: PingRecordsRespon
   };
 }
 
-async function getCfsmPingRecordsForNodes(
-  uuids: string[],
-  hours: number,
-  options?: ApiCallOptions,
-): Promise<PingRecordsResponse> {
-  const safeHours = hours > 0 ? hours : 0.167;
-  const responses = await Promise.all(
-    uuids.map(async (uuid) => {
-      const rows = await fetchHistoryRows(uuid, safeHours, options);
-      return { uuid, rows };
-    }),
-  );
-
-  const records = responses
-    .flatMap(({ uuid, rows }) =>
-      rows.flatMap((row) => {
-        const record = asRecord(row);
-        const time = normalizeTimestamp(record.timestamp);
-        if (time <= 0) return [];
-        return CFSM_PROBE_DEFS.flatMap((def) => {
-          const value = normalizeProbeField(record, def.pingField);
-          const loss = normalizeProbeField(record, def.lossField);
-          if (value == null && loss == null) return [];
-          return [{
-            task_id: def.id,
-            time,
-            value: value ?? -1,
-            client: uuid,
-            count: 1,
-            loss: loss == null ? (value == null ? 100 : 0) : clampLossPercent(loss),
-          }];
-        });
-      }),
-    )
-    .sort((left, right) => asNumber(left.time) - asNumber(right.time));
-  const observedTaskIds = new Set(records.map((record) => record.task_id));
-  const tasks = CFSM_PROBE_DEFS
-    .filter((def) => observedTaskIds.has(def.id))
-    .map((def) => ({
-      ...getCfsmProbeTask(def.id)!,
-      clients: uuids,
-    }));
-  const stats = responses.flatMap(({ uuid }) =>
-    tasks.map((task) =>
-      buildPingStats(
-        uuid,
-        task,
-        records.filter((record) => record.client === uuid && record.task_id === task.id),
-      ),
+function detectHistoryIntervalSeconds(records: PingRecordsResponse["records"]) {
+  const times = Array.from(
+    new Set(
+      records
+        .map((record) => normalizeTimestamp(record.time))
+        .filter((time) => time > 0),
     ),
-  );
+  ).sort((left, right) => left - right);
 
-  return {
-    count: records.length,
-    records,
-    tasks,
-    stats,
-    rangeStartMs: Date.now() - safeHours * 60 * 60 * 1000,
-    rangeEndMs: Date.now(),
-    intervalSeconds: 60,
-  };
+  if (times.length < 2) return 60;
+
+  const gaps: number[] = [];
+  for (let index = 1; index < times.length; index += 1) {
+    const gapSeconds = (times[index] - times[index - 1]) / 1000;
+    if (gapSeconds > 0) gaps.push(gapSeconds);
+  }
+  if (gaps.length === 0) return 60;
+
+  gaps.sort((left, right) => left - right);
+  const mid = Math.floor(gaps.length / 2);
+  return gaps.length % 2 === 0 ? (gaps[mid - 1] + gaps[mid]) / 2 : gaps[mid];
 }
 
 async function fetchHistoryRows(
@@ -759,14 +719,30 @@ async function fetchHistoryRows(
   const results =
     typeof knownBaseIndex === "number"
       ? [
-          await requestJson<unknown[]>(path, {
+          await requestJson<unknown>(path, {
             ...options,
             baseIndex: knownBaseIndex,
             autoRedirect: false,
           }),
         ]
-      : await requestAll<unknown[]>(path, { ...options, autoRedirect: false });
-  return results.flatMap((result) => (Array.isArray(result.data) ? result.data : []));
+      : await requestAll<unknown>(path, { ...options, autoRedirect: false });
+  return results.flatMap((result) => extractHistoryRows(result.data));
+}
+
+function extractHistoryRows(data: unknown): unknown[] {
+  if (Array.isArray(data)) return data;
+  const payloads = [asRecord(data)];
+  for (const value of [payloads[0]?.data, payloads[0]?.result]) {
+    const nested = asRecord(value);
+    if (Object.keys(nested).length > 0) payloads.push(nested);
+  }
+  for (const payload of payloads) {
+    for (const key of ["records", "rows", "history", "items", "data"]) {
+      const value = payload[key];
+      if (Array.isArray(value)) return value;
+    }
+  }
+  return [];
 }
 
 function buildLoadHistoryResponse(
@@ -786,6 +762,88 @@ function buildLoadHistoryResponse(
   };
 }
 
+function asJsonRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "string") {
+    try {
+      return asRecord(JSON.parse(value));
+    } catch {
+      return {};
+    }
+  }
+  return asRecord(value);
+}
+
+function collectHistoryProbeRecords(row: unknown): Record<string, unknown>[] {
+  const root = asRecord(row);
+  const records = [root];
+  for (const key of ["metrics", "data", "payload", "record", "values", "averages", "avg"]) {
+    const nested = asJsonRecord(root[key]);
+    if (Object.keys(nested).length > 0) records.push(nested);
+  }
+  return records;
+}
+
+function parseProbeValue(value: unknown): number | null {
+  const direct = parseProbeMetricValue(value);
+  if (direct != null) return direct;
+  const record = asJsonRecord(value);
+  for (const key of ["value", "avg", "mean", "latest", "current"]) {
+    if (!hasOwn(record, key)) continue;
+    const nested = parseProbeMetricValue(record[key]);
+    if (nested != null) return nested;
+  }
+  return null;
+}
+
+function readHistoryProbeMetric(
+  records: Record<string, unknown>[],
+  kind: "ping" | "loss",
+  def: (typeof CFSM_PROBE_DEFS)[number],
+): number | null {
+  const field = kind === "ping" ? def.pingField : def.lossField;
+  const compactKey = field.replace(/^(ping|loss)_/, "");
+  const flatKeys = [
+    field,
+    `${field}_avg`,
+    `avg_${field}`,
+    `${kind}_${def.windowKey}`,
+    `${kind}_${def.type}`,
+  ];
+  const nestedKeys =
+    kind === "ping"
+      ? ["ping", "pings", "latency", "latencies"]
+      : ["loss", "losses", "packet_loss", "packetLoss"];
+  const metricKeys = [
+    def.windowKey,
+    def.type,
+    String(def.id),
+    field,
+    compactKey,
+    def.name,
+    def.pingField,
+    def.lossField,
+  ];
+
+  for (const record of records) {
+    for (const key of flatKeys) {
+      const flat = parseProbeValue(record[key]);
+      if (flat != null) return flat;
+    }
+
+    for (const nestedKey of nestedKeys) {
+      const nested = asJsonRecord(record[nestedKey]);
+      if (Object.keys(nested).length === 0) continue;
+      for (const key of metricKeys) {
+        if (!hasOwn(nested, key)) continue;
+        const value = parseProbeValue(nested[key]);
+        if (value != null) return value;
+      }
+    }
+  }
+
+  return null;
+}
+
 function buildPingHistoryResponse(
   uuid: string,
   hours: number,
@@ -794,11 +852,12 @@ function buildPingHistoryResponse(
   const records = rows
     .flatMap((row) => {
       const record = asRecord(row);
-      const time = normalizeTimestamp(record.timestamp);
+      const time = normalizeTimestamp(record.timestamp ?? record.time ?? record.ts);
       if (time <= 0) return [];
+      const probeRecords = collectHistoryProbeRecords(row);
       return CFSM_PROBE_DEFS.flatMap((def) => {
-        const value = normalizeProbeField(record, def.pingField);
-        const loss = normalizeProbeField(record, def.lossField);
+        const value = readHistoryProbeMetric(probeRecords, "ping", def);
+        const loss = readHistoryProbeMetric(probeRecords, "loss", def);
         if (value == null && loss == null) return [];
         return [{
           task_id: def.id,
@@ -825,14 +884,16 @@ function buildPingHistoryResponse(
       records.filter((record) => record.task_id === task.id),
     ),
   );
+  const firstTime = asNumber(records[0]?.time);
+  const lastTime = asNumber(records[records.length - 1]?.time);
   return {
     count: records.length,
     records,
     tasks,
     stats,
-    rangeStartMs: Date.now() - hours * 60 * 60 * 1000,
-    rangeEndMs: Date.now(),
-    intervalSeconds: 60,
+    rangeStartMs: firstTime > 0 ? firstTime : Date.now() - hours * 60 * 60 * 1000,
+    rangeEndMs: lastTime > 0 ? lastTime : Date.now(),
+    intervalSeconds: detectHistoryIntervalSeconds(records),
   };
 }
 
@@ -1039,14 +1100,6 @@ async function getCfsmHomepagePingSnapshot(
   options?: ApiCallOptions,
 ): Promise<HomepagePingSnapshot> {
   return loadCfsmHomepagePingSnapshot(entityIds, options);
-}
-
-export async function getPingRecords(
-  uuid: string,
-  hours = 6,
-  options?: ApiCallOptions,
-): Promise<PingRecordsResponse> {
-  return getCfsmPingRecordsForNodes(uuid ? [uuid] : [], hours, options);
 }
 
 export async function getPingOverview(

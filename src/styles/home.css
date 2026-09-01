@@ -89,12 +89,6 @@
 .overview-card[data-metric="bandwidth"] { --metric-accent: var(--speed-high); }
 .overview-card[data-metric="asset"] { --metric-accent: var(--accent-500); }
 
-/* 暗色依靠表面色阶建立层级，不叠白色顶光或指标色氛围。背景图模式仍由 --surface-a
-   保留用户配置的透明度。 */
-:root[data-appearance="dark"] .overview-card {
-  background: var(--surface-a);
-}
-
 .overview-card-head {
   display: flex;
   min-width: 0;
@@ -687,8 +681,7 @@
 }
 
 /* 激活 tab 的描边+浮起阴影与费用抽屉的排序 tab(cost-summary.css 的 .cost-summary-sort-tab)
-   完全一致,组选择器只定义这一处;背景与文字色两处风格不同(费用抽屉用硬编码固定色,且暗色下
-   不另配阴影),仍各自定义。 */
+   完全一致,组选择器只定义这一处。 */
 .home-group-tabs button[data-active="true"],
 .home-region-chip[data-active="true"],
 .cost-summary-sort-tab[data-active="true"] {
@@ -699,12 +692,6 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
-[data-appearance="dark"] .home-group-tabs button[data-active="true"],
-[data-appearance="dark"] .home-region-chip[data-active="true"],
-[data-appearance="dark"] .cost-summary-sort-tab[data-active="true"] {
-  border-color: rgba(255, 255, 255, 0.12);
-}
-
 .home-group-tabs button[data-active="true"],
 .home-region-chip[data-active="true"] {
   background:
@@ -713,21 +700,6 @@
       color-mix(in srgb, var(--surface-elev-a) 96%, white 4%) 0%,
       color-mix(in srgb, var(--hover-bg-a) 54%, var(--surface-a)) 100%
     );
-  color: var(--text-primary);
-}
-
-[data-appearance="dark"] .home-group-tabs button[data-active="true"],
-[data-appearance="dark"] .home-region-chip[data-active="true"] {
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--surface-elev-a) 94%, white 6%) 0%,
-      color-mix(in srgb, var(--hover-bg-a) 48%, var(--surface-a)) 100%
-    );
-  box-shadow:
-    0 10px 22px -18px rgba(0, 0, 0, 0.72),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
 }
 

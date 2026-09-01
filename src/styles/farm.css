@@ -58,7 +58,27 @@
   --status-warning: #d99a2b;
   --status-error: #d64545;
   --status-info: #4a90d9;
-  /* 延迟阶梯沿用 light 的绿→红，羊皮纸上同样清晰 */
+  --latency-excellent: #22c55e;
+  --latency-good: #84cc16;
+  --latency-moderate: #cbd83a;
+  --latency-elevated: #f97316;
+  --latency-critical: #dc2626;
+  --speed-idle: #3aa76a;
+  --speed-low: #d9992b;
+  --speed-high: #e07a35;
+  --speed-max: #d6463d;
+  --traffic-heat-spectrum:
+    linear-gradient(
+      90deg,
+      oklch(0.72 0.16 150) 0%,
+      oklch(0.72 0.16 150) 10%,
+      oklch(0.8 0.18 128) 28%,
+      oklch(0.86 0.18 110) 44%,
+      oklch(0.8 0.18 85) 58%,
+      oklch(0.72 0.19 62) 72%,
+      oklch(0.65 0.21 40) 86%,
+      oklch(0.6 0.22 27) 100%
+    );
 
   /* 品牌强调换成叶绿色（Spinner / 主 CTA / 激活态） */
   --accent-500: #58a447;
@@ -694,7 +714,7 @@ html[data-appearance="farm"][data-farm-scene="dusk"]:not([data-bg-image]) body::
 
 /* 控制条图标像素化（与卡片同一套 mask 技术；按钮里本来就是 16px，1:1 不糊） */
 :root[data-appearance="farm"] .floating-controls
-  svg:is(.lucide-sun, .lucide-moon, .lucide-monitor, .lucide-sprout, .lucide-palette, .lucide-settings, .lucide-sliders-horizontal, .lucide-chevron-left, .lucide-chevron-right, .lucide-layout-grid, .lucide-rows-3, .lucide-grid-3x3, .lucide-list) {
+  svg:is(.lucide-palette, .lucide-settings, .lucide-sliders-horizontal, .lucide-chevron-left, .lucide-chevron-right, .lucide-layout-grid, .lucide-rows-3, .lucide-grid-3x3, .lucide-list) {
   background: currentColor;
   -webkit-mask-position: center;
   mask-position: center;
@@ -704,27 +724,11 @@ html[data-appearance="farm"][data-farm-scene="dusk"]:not([data-bg-image]) body::
   mask-size: contain;
 }
 :root[data-appearance="farm"] .floating-controls
-  svg:is(.lucide-sun, .lucide-moon, .lucide-monitor, .lucide-sprout, .lucide-palette, .lucide-settings, .lucide-sliders-horizontal, .lucide-chevron-left, .lucide-chevron-right, .lucide-layout-grid, .lucide-rows-3, .lucide-grid-3x3, .lucide-list) * {
+  svg:is(.lucide-palette, .lucide-settings, .lucide-sliders-horizontal, .lucide-chevron-left, .lucide-chevron-right, .lucide-layout-grid, .lucide-rows-3, .lucide-grid-3x3, .lucide-list) * {
   stroke: transparent !important;
   fill: transparent !important;
 }
 
-:root[data-appearance="farm"] .floating-controls svg.lucide-sun {
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M5 5h6v6H5zM7 0h2v4H7zM7 12h2v4H7zM0 7h4v2H0zM12 7h4v2h-4z'/%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M5 5h6v6H5zM7 0h2v4H7zM7 12h2v4H7zM0 7h4v2H0zM12 7h4v2h-4z'/%3E%3C/svg%3E");
-}
-:root[data-appearance="farm"] .floating-controls svg.lucide-moon {
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M5 1h5v1h2v2h1v2h1v5h-1v2h-2v1h-1v1H6v-1H4v-1H3v-2H2V6h1V4h1V3h1zM8 3h3v1h1v1h1v5h-1v1h-1v1H8v-1H7v-1H6V6h1V5h1z'/%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M5 1h5v1h2v2h1v2h1v5h-1v2h-2v1h-1v1H6v-1H4v-1H3v-2H2V6h1V4h1V3h1zM8 3h3v1h1v1h1v5h-1v1h-1v1H8v-1H7v-1H6V6h1V5h1z'/%3E%3C/svg%3E");
-}
-:root[data-appearance="farm"] .floating-controls svg.lucide-monitor {
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M2 2h12v9H2zM4 4h8v5H4z'/%3E%3Cpath d='M7 12h2v2H7zM5 14h6v1H5z'/%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M2 2h12v9H2zM4 4h8v5H4z'/%3E%3Cpath d='M7 12h2v2H7zM5 14h6v1H5z'/%3E%3C/svg%3E");
-}
-:root[data-appearance="farm"] .floating-controls svg.lucide-sprout {
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 3h4v3H3zM2 4h1v2H2zM9 3h4v3H9zM13 4h1v2h-1zM5 6h3v2H5zM8 6h3v2H8zM7 8h2v7H7zM5 15h6v1H5z'/%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 3h4v3H3zM2 4h1v2H2zM9 3h4v3H9zM13 4h1v2h-1zM5 6h3v2H5zM8 6h3v2H8zM7 8h2v7H7zM5 15h6v1H5z'/%3E%3C/svg%3E");
-}
 :root[data-appearance="farm"] .floating-controls svg.lucide-palette {
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M5 2h6v1h2v2h1v6h-1v2h-2v1H5v-1H3v-2H2V5h1V3h2zM5 5h2v2H5zM9 4h2v2H9zM4 8h2v2H4zM10 10h4v4h-4z'/%3E%3C/svg%3E");
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M5 2h6v1h2v2h1v6h-1v2h-2v1H5v-1H3v-2H2V5h1V3h2zM5 5h2v2H5zM9 4h2v2H9zM4 8h2v2H4zM10 10h4v4h-4z'/%3E%3C/svg%3E");

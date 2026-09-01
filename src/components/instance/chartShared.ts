@@ -50,11 +50,11 @@ export function colorForSeries(index: number, total?: number): string {
     : `hsl(${hue}, 50%, 60%)`;
 }
 
-// uPlot 图表的坐标轴网格/文字颜色。单一来源，避免 LoadChart 和 PingChart 在 dark/light 字面量上漂移。
-export function getAxisColors(isDark: boolean): { grid: string; text: string } {
+// uPlot 图表的坐标轴网格/文字颜色。单一来源，避免 LoadChart 和 PingChart 漂移。
+export function getAxisColors(): { grid: string; text: string } {
   return {
-    grid: isDark ? "rgba(255,255,255,0.065)" : "rgba(0,0,0,0.08)",
-    text: isDark ? "#a5a5aa" : "#52525b",
+    grid: "rgba(0,0,0,0.08)",
+    text: "#52525b",
   };
 }
 

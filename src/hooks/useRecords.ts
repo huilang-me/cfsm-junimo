@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { getInstanceHistory, getLoadRecords, getPingRecords } from "@/services/api";
+import { getInstanceHistory, getLoadRecords } from "@/services/api";
 
 const RECORD_QUERY_OPTIONS = {
   staleTime: Infinity,
@@ -7,6 +7,14 @@ const RECORD_QUERY_OPTIONS = {
   refetchOnWindowFocus: false,
   refetchOnReconnect: false,
   refetchOnMount: false,
+} as const;
+
+const INSTANCE_HISTORY_QUERY_OPTIONS = {
+  staleTime: 0,
+  gcTime: 0,
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: true,
+  refetchOnMount: "always",
 } as const;
 
 export function useLoadRecords(uuid: string, hours = 6, enabled = true) {
@@ -18,21 +26,11 @@ export function useLoadRecords(uuid: string, hours = 6, enabled = true) {
   });
 }
 
-// stats 已并入 getPingRecords 的同一次请求(response.stats),不再单独发起查询。
-export function usePingRecords(uuid: string, hours = 6, enabled = true) {
-  return useQuery({
-    queryKey: ["records", "ping", uuid, hours],
-    queryFn: () => getPingRecords(uuid, hours),
-    ...RECORD_QUERY_OPTIONS,
-    enabled: Boolean(uuid) && enabled,
-  });
-}
-
 export function useInstanceHistory(uuid: string, hours = 6, enabled = true) {
   return useQuery({
-    queryKey: ["records", "instance", uuid, hours],
+    queryKey: ["records", "instance", "history-all-v3", uuid, hours],
     queryFn: () => getInstanceHistory(uuid, hours),
-    ...RECORD_QUERY_OPTIONS,
+    ...INSTANCE_HISTORY_QUERY_OPTIONS,
     enabled: Boolean(uuid) && enabled,
   });
 }

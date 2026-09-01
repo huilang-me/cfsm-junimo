@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, Grid3x3, LayoutGrid, List, Monitor, Rows3, Settings, Sprout, Sun, Moon } from "lucide-react";
-import { usePreferences } from "@/hooks/usePreferences";
+import { AlertTriangle, ChevronLeft, ChevronRight, Grid3x3, LayoutGrid, List, Rows3, Settings } from "lucide-react";
 import { useViewMode } from "@/hooks/useViewMode";
 import { useNodeStoreStatus } from "@/hooks/useNode";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,19 +16,11 @@ const VIEW_MODE_META: Record<NodeViewMode, { icon: typeof LayoutGrid; label: str
   list: { icon: List, label: "列表视图" },
 };
 
-const APPEARANCE_OPTIONS = [
-  { value: "light", icon: Sun, label: "浅色" },
-  { value: "system", icon: Monitor, label: "跟随系统" },
-  { value: "dark", icon: Moon, label: "深色" },
-  { value: "farm", icon: Sprout, label: "像素农场" },
-] as const;
-
 export function FloatingControls({
   onExpandedChange,
 }: {
   onExpandedChange?: (expanded: boolean) => void;
 }) {
-  const { appearance, setAppearance } = usePreferences();
   const { mode, nextMode, toggleMode } = useViewMode();
   const { data: me } = useAuth();
   const themeSettings = useThemeSettings();
@@ -67,45 +58,20 @@ export function FloatingControls({
         <div className="floating-controls-row">
           <div className="floating-controls-actions" aria-hidden={collapsed}>
             {settingsReady && (
-              <>
-                <div
-                  className="control-group floating-controls-appearance"
-                  role="group"
-                  aria-label="外观选择"
-                >
-                  {APPEARANCE_OPTIONS.map(({ value, icon: Icon, label }) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setAppearance(value)}
-                      aria-label={label}
-                      aria-pressed={appearance === value}
-                      title={label}
-                      tabIndex={hiddenTabIndex}
-                      className={clsx(
-                        "control-button grid h-9 w-9 place-items-center",
-                        appearance === value && "control-toggle is-active",
-                      )}
-                    >
-                      <Icon size={16} />
-                    </button>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={toggleMode}
-                  aria-label="切换卡片视图"
-                  aria-pressed={isReducedView}
-                  title={`临时切换到${VIEW_MODE_META[nextMode].label}`}
-                  tabIndex={hiddenTabIndex}
-                  className={clsx(
-                    "control-button grid h-9 w-9 place-items-center",
-                    isReducedView && "control-toggle is-active",
-                  )}
-                >
-                  <ViewIcon size={16} />
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={toggleMode}
+                aria-label="切换卡片视图"
+                aria-pressed={isReducedView}
+                title={`临时切换到${VIEW_MODE_META[nextMode].label}`}
+                tabIndex={hiddenTabIndex}
+                className={clsx(
+                  "control-button grid h-9 w-9 place-items-center",
+                  isReducedView && "control-toggle is-active",
+                )}
+              >
+                <ViewIcon size={16} />
+              </button>
             )}
             {showAdmin && (
               <a

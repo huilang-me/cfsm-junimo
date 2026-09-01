@@ -162,7 +162,7 @@ export interface HomepageMultiPingGroup {
 }
 
 export interface ThemeSettings {
-  defaultAppearance?: "system" | "light" | "dark" | "farm";
+  defaultAppearance?: "farm";
   desktopNodeViewMode?: "large" | "compact" | "mini" | "list";
   mobileNodeViewMode?: "large" | "compact" | "mini" | "list";
   enableAdminButton?: boolean;

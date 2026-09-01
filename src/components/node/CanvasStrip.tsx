@@ -114,52 +114,26 @@ let cssColorCacheKey: string | null = null;
 let colorValidationContext: CanvasRenderingContext2D | null | undefined;
 
 const CANVAS_COLOR_FALLBACKS = {
-  light: {
-    "--progress-bg": "#e4e4e7",
-    "--progress-cpu": "#3b82f6",
-    "--progress-memory": "#8b5cf6",
-    "--progress-disk": "#e97b35",
-    "--progress-network": "#10b981",
-    "--progress-load": "#ec4899",
-    "--progress-swap": "#6366f1",
-    "--traffic-up": "#3b82f6",
-    "--traffic-down": "#2f9e65",
-    "--speed-idle": "#3aa76a",
-    "--speed-low": "#d9992b",
-    "--speed-high": "#e07a35",
-    "--speed-max": "#d6463d",
-    "--status-success": "#2f9e65",
-    "--status-warning": "#e9a23b",
-    "--status-error": "#dc2626",
-    "--status-info": "#3b82f6",
-    "--status-online": "#2f9e65",
-    "--status-offline": "#dc2626",
-    "--text-tertiary": "#71717a",
-  },
-  // 与 tokens.css 深色 token 保持同值(color-mix 变量取 depth=0 的基色),只在首帧/样式
-  // 未就绪时命中,避免回退色与 DOM 侧漂移。
-  dark: {
-    "--progress-bg": "#343b45",
-    "--progress-cpu": "#539bf5",
-    "--progress-memory": "#b083f0",
-    "--progress-disk": "#e0823d",
-    "--progress-network": "#57ab5a",
-    "--progress-load": "#e275ad",
-    "--progress-swap": "#986ee2",
-    "--traffic-up": "#539bf5",
-    "--traffic-down": "#57ab5a",
-    "--speed-idle": "#57ab5a",
-    "--speed-low": "#daaa3f",
-    "--speed-high": "#e0823d",
-    "--speed-max": "#f47067",
-    "--status-success": "#57ab5a",
-    "--status-warning": "#daaa3f",
-    "--status-error": "#f47067",
-    "--status-info": "#539bf5",
-    "--status-online": "#57ab5a",
-    "--status-offline": "#f47067",
-    "--text-tertiary": "#9198a1",
-  },
+  "--progress-bg": "#e3d0a0",
+  "--progress-cpu": "#4a90d9",
+  "--progress-memory": "#9b6bd6",
+  "--progress-disk": "#d9832b",
+  "--progress-network": "#5da85a",
+  "--progress-load": "#d96a9f",
+  "--progress-swap": "#7a5fd0",
+  "--traffic-up": "#4a90d9",
+  "--traffic-down": "#58a447",
+  "--speed-idle": "#3aa76a",
+  "--speed-low": "#d9992b",
+  "--speed-high": "#e07a35",
+  "--speed-max": "#d6463d",
+  "--status-success": "#58a447",
+  "--status-warning": "#d99a2b",
+  "--status-error": "#d64545",
+  "--status-info": "#4a90d9",
+  "--status-online": "#58a447",
+  "--status-offline": "#d64545",
+  "--text-tertiary": "#93764f",
 } as const;
 
 function extractCssVarName(color: string): string | null {
@@ -168,9 +142,8 @@ function extractCssVarName(color: string): string | null {
 
 function fallbackCanvasColor(varName: string | null): string {
   if (!varName) return "#000000";
-  const appearance = document.documentElement.dataset.appearance === "dark" ? "dark" : "light";
-  return CANVAS_COLOR_FALLBACKS[appearance][
-    varName as keyof (typeof CANVAS_COLOR_FALLBACKS)["light"]
+  return CANVAS_COLOR_FALLBACKS[
+    varName as keyof typeof CANVAS_COLOR_FALLBACKS
   ] ?? "#000000";
 }
 
@@ -199,8 +172,8 @@ function resolveCssColor(color: string): string {
   return resolved || color;
 }
 
-// canvas 的颜色解析器不认 color-mix()/calc()(如深色 --progress-bg 随 --dark-depth 混色),
-// 借 DOM 的 color 属性让 CSS 引擎算成 rgb。键含替换后的变量值,深度/配色一变即天然失效。
+// canvas 的颜色解析器不认 color-mix()/calc(),借 DOM 的 color 属性让 CSS 引擎算成 rgb。
+// 键含替换后的变量值,配色一变即天然失效。
 let cssEngineProbe: HTMLElement | null = null;
 const cssEngineColorCache = new Map<string, string | null>();
 
