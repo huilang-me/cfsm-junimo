@@ -2,17 +2,17 @@ name: Deploy Build Branch
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - package.json
-      - package-lock.json
-      - index.html
-      - vite.config.ts
-      - tsconfig*.json
-      - src/**
-      - public/**
+  # push:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - package.json
+  #     - package-lock.json
+  #     - index.html
+  #     - vite.config.ts
+  #     - tsconfig*.json
+  #     - src/**
+  #     - public/**
 
 jobs:
   deploy:

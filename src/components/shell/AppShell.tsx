@@ -65,8 +65,9 @@ export function AppShell() {
             target="_blank"
             rel="noopener noreferrer"
             className="app-powered-link"
+            title={cfsmVersion || ""}
           >
-            CF-Server-Monitor{cfsmVersion ? ` ${cfsmVersion}` : ""}
+            CF-Server-Monitor
           </a>
           <span className="app-powered-separator"> · </span>
           theme by{" "}

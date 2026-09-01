@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:github-page": "tsc -b && vite build --base ./ && node scripts/build-github-page.js",
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc -b",

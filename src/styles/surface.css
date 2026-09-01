@@ -165,10 +165,11 @@ body::after {
   display: inline;
   max-width: 100%;
   overflow-wrap: anywhere;
-  color: var(--text-tertiary);
+  color: var(--text-primary);
   font-size: 12px;
   font-weight: 560;
   line-height: 1.5;
+  opacity: .6;
 }
 
 .app-powered-link {
