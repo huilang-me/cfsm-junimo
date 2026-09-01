@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from "react";
+import { useMinuteClock } from "@/hooks/useClock";
 import { useNodeMeta, useNodeMetrics } from "@/hooks/useNode";
 import {
   formatBytes,
@@ -30,11 +31,15 @@ export function InstanceDetails({
     return onNodeReady?.();
   }, [isReady, onNodeReady, uuid]);
 
+  const now = useMinuteClock(Boolean(metrics?.bootTime));
+
   if (!meta || !metrics) return null;
 
   const isOnline = metrics.online;
-  const uptime = formatUptimeDays(metrics.uptime);
-  // 按 traffic_limit_type (max/sum/up/down/min) 归并上下行，和卡片、后端保持一致——
+  const uptimeSeconds =
+    metrics.bootTime > 0 ? Math.max(0, (now - metrics.bootTime) / 1000) : metrics.uptime;
+  const uptime = formatUptimeDays(uptimeSeconds);
+  // 按 traffic_calc_type (ul/dl/total/max) 归并上下行，和卡片、后端保持一致——
   // 对非 "sum" 节点直接把上下行相加是错的。
   const trafficUsage = resolveTrafficUsage(
     meta.traffic_limit_type,
@@ -63,7 +68,6 @@ export function InstanceDetails({
             value={`${meta.cpu_name || "—"}${meta.cpu_cores > 0 ? ` (x${meta.cpu_cores})` : ""}`}
           />
           <InfoRow label="架构" value={meta.arch || "—"} />
-          <InfoRow label="虚拟化" value={meta.virtualization || "—"} />
           <InfoRow label="显卡" value={meta.gpu_name || "—"} />
           <InfoRow label="操作系统" value={meta.os || "—"} />
         </div>

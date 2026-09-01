@@ -75,20 +75,23 @@ interface TimeRangeOption {
 // load 和 ping 共用同一套历史区间预设；唯一区别是是否在前面加 "实时" 选项，这由
 // buildHistoryRangeOptions 的 includeRealtime 标志处理，而非改预设列表本身。
 const TIME_RANGE_OPTIONS: TimeRangeOption[] = [
+  { label: "30 分钟", value: 0.5 },
   { label: "1 小时", value: 1 },
-  { label: "4 小时", value: 4 },
+  { label: "6 小时", value: 6 },
   { label: "1 天", value: 24 },
+  { label: "2 天", value: 48 },
   { label: "7 天", value: 168 },
   { label: "30 天", value: 720 },
 ];
 
-// Ping 详情只保留高分辨率仍有观察价值的四档。metric store 虽可保留更久，
+// Ping 详情只保留高分辨率仍有观察价值的快捷档。metric store 虽可保留更久，
 // 但 30/90 天会退化到小时级 rollup，不再放进详情页快捷范围。
 const PING_TIME_RANGE_OPTIONS: TimeRangeOption[] = TIME_RANGE_OPTIONS.filter(
   (option) => option.value <= 168,
 );
 
 function formatRangeLabel(hours: number) {
+  if (hours < 1) return `${Math.round(hours * 60)} 分钟`;
   if (hours % 24 === 0) {
     const days = hours / 24;
     return `${days} 天`;

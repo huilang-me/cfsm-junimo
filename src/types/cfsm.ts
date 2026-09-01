@@ -76,9 +76,17 @@ export interface NodeRealtime {
   swap: { total: number; used: number };
   load: { load1: number; load5: number; load15: number };
   disk: { total: number; used: number };
-  network: { up: number; down: number; totalUp: number; totalDown: number };
+  network: {
+    up: number;
+    down: number;
+    totalUp: number;
+    totalDown: number;
+    lifetimeUp?: number;
+    lifetimeDown?: number;
+  };
   connections: { tcp: number; udp: number };
   uptime: number;
+  bootTime?: number;
   process: number;
   updated_at?: string | number;
   gpuUtil?: number | null;
@@ -115,7 +123,10 @@ export interface NodeMetrics {
   netDown: number;
   trafficUp: number;
   trafficDown: number;
+  trafficTotalUp: number;
+  trafficTotalDown: number;
   uptime: number;
+  bootTime: number;
   load1: number;
   load5: number;
   load15: number;

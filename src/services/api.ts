@@ -292,6 +292,30 @@ function parseTrafficLimit(value: unknown) {
   return Number.isFinite(amount) && power >= 0 ? amount * 1024 ** power : 0;
 }
 
+function parseIpStackFlag(value: unknown) {
+  const normalized = asString(value).trim().toLowerCase();
+  if (!normalized || normalized === "0" || normalized === "false" || normalized === "no") {
+    return "";
+  }
+  return normalized;
+}
+
+function pickMonthlyTrafficUp(record: Record<string, unknown>) {
+  return hasOwn(record, "net_tx_monthly") ? asNumber(record.net_tx_monthly) : asNumber(record.net_tx);
+}
+
+function pickMonthlyTrafficDown(record: Record<string, unknown>) {
+  return hasOwn(record, "net_rx_monthly") ? asNumber(record.net_rx_monthly) : asNumber(record.net_rx);
+}
+
+function pickLifetimeTrafficUp(record: Record<string, unknown>) {
+  return hasOwn(record, "net_tx") ? asNumber(record.net_tx) : pickMonthlyTrafficUp(record);
+}
+
+function pickLifetimeTrafficDown(record: Record<string, unknown>) {
+  return hasOwn(record, "net_rx") ? asNumber(record.net_rx) : pickMonthlyTrafficDown(record);
+}
+
 function parseGpuName(value: unknown) {
   const raw = typeof value === "string" ? value : JSON.stringify(value ?? "");
   if (!raw || raw === "null") return "";
@@ -344,8 +368,8 @@ export function mapServerToNodeInfo(
     public_remark: "",
     traffic_limit: parseTrafficLimit(server.traffic_limit),
     traffic_limit_type: asString(server.traffic_calc_type || "total"),
-    ipv4: asString(server.ip_v4),
-    ipv6: asString(server.ip_v6),
+    ipv4: parseIpStackFlag(server.ip_v4),
+    ipv6: parseIpStackFlag(server.ip_v6),
     created_at: "",
     updated_at: asString(server.last_updated ?? server.timestamp),
     __cfsmBaseIndex: baseIndex,
@@ -365,13 +389,16 @@ export function mapServerToLatestRecord(rawServer: unknown): Record<string, unkn
     swap_total: asNumber(server.swap_total) * 1024 * 1024,
     disk_used: asNumber(server.disk_used) * 1024 * 1024,
     disk_total: asNumber(server.disk_total) * 1024 * 1024,
-    net_total_up: hasOwn(server, "net_tx") ? asNumber(server.net_tx) : asNumber(server.net_tx_monthly),
-    net_total_down: hasOwn(server, "net_rx") ? asNumber(server.net_rx) : asNumber(server.net_rx_monthly),
+    net_total_up: pickMonthlyTrafficUp(server),
+    net_total_down: pickMonthlyTrafficDown(server),
+    net_lifetime_up: pickLifetimeTrafficUp(server),
+    net_lifetime_down: pickLifetimeTrafficDown(server),
     net_out: asNumber(server.net_out_speed),
     net_in: asNumber(server.net_in_speed),
     process: asNumber(server.processes),
     connections: asNumber(server.tcp_conn),
     connections_udp: asNumber(server.udp_conn),
+    boot_time: server.boot_time,
     updated_at: server.last_updated ?? server.timestamp,
   };
 }
@@ -398,8 +425,8 @@ function mapHistoryRow(row: unknown, uuid: string): LoadRecord {
     disk_total: asNumber(record.disk_total) * 1024 * 1024,
     net_in: asNumber(record.net_in_speed),
     net_out: asNumber(record.net_out_speed),
-    net_total_up: hasOwn(record, "net_tx") ? asNumber(record.net_tx) : asNumber(record.net_tx_monthly),
-    net_total_down: hasOwn(record, "net_rx") ? asNumber(record.net_rx) : asNumber(record.net_rx_monthly),
+    net_total_up: pickMonthlyTrafficUp(record),
+    net_total_down: pickMonthlyTrafficDown(record),
     process: asNumber(record.processes),
     connections: asNumber(record.tcp_conn),
     connections_udp: asNumber(record.udp_conn),

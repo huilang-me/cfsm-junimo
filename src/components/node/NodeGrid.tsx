@@ -62,8 +62,7 @@ interface HomeOverview {
   totalNodes: number;
   onlineNodes: number;
   offlineNodes: number;
-  trafficUp: number;
-  trafficDown: number;
+  trafficTotal: number;
   netUp: number;
   netDown: number;
 }
@@ -105,23 +104,20 @@ function HomeOverviewCards({
   onToggleBandwidthSort: () => void;
   bandwidthSortActive: boolean;
 }) {
-  const [trafficValue, trafficUnit] = formatBytes(
-    overview.trafficUp + overview.trafficDown,
-  ).split(" ");
+  const [trafficValue, trafficUnit] = formatBytes(overview.trafficTotal).split(" ");
   const rate = formatByteRate(overview.netUp + overview.netDown);
   const onlinePct =
     overview.totalNodes > 0 ? (overview.onlineNodes / overview.totalNodes) * 100 : 0;
   const offlinePct =
     overview.totalNodes > 0 ? (overview.offlineNodes / overview.totalNodes) * 100 : 0;
-  const trafficDetailLabel = `↑ ${formatBytes(overview.trafficUp)} · ↓ ${formatBytes(overview.trafficDown)}`;
-  const trafficCompactLabel = `↑${formatCompactBytes(overview.trafficUp)} ↓${formatCompactBytes(overview.trafficDown)}`;
+  const trafficDetailLabel = "总上传 + 总下载";
   const bandwidthDetailLabel = `↑ ${formatByteRateLabel(overview.netUp)} · ↓ ${formatByteRateLabel(overview.netDown)}`;
   const bandwidthCompactLabel = `↑${formatCompactBytes(overview.netUp)} ↓${formatCompactBytes(overview.netDown)}`;
   const trafficRating =
     showOverviewRatings && showTrafficRating
       ? getOverviewRating({
           kind: "traffic",
-          value: overview.trafficUp + overview.trafficDown,
+          value: overview.trafficTotal,
           customLabels: trafficRatingLabels,
         })
       : null;
@@ -212,7 +208,7 @@ function HomeOverviewCards({
 
       <article className="overview-card" data-metric="traffic">
         <div className="overview-card-head">
-          <span className="overview-card-label">累计流量</span>
+          <span className="overview-card-label">开机以来总流量</span>
         </div>
         <div className="overview-card-main">
           <p className="overview-card-value">
@@ -223,7 +219,7 @@ function HomeOverviewCards({
         <div className="overview-card-footer">
           <p className="overview-card-sub" title={trafficDetailLabel}>
             <span className="overview-card-sub-full">{trafficDetailLabel}</span>
-            <span className="overview-card-sub-compact">{trafficCompactLabel}</span>
+            <span className="overview-card-sub-compact">{trafficDetailLabel}</span>
           </p>
           {renderRating(trafficRating)}
         </div>
@@ -393,21 +389,18 @@ export function NodeGrid() {
   const overview = useMemo<HomeOverview>(() => {
     let onlineNodes = 0;
     let offlineNodes = 0;
-    let trafficUp = 0;
-    let trafficDown = 0;
+    let trafficTotal = 0;
     for (const node of visibleNodes) {
       if (node.online === true) onlineNodes += 1;
       else if (node.online === false) offlineNodes += 1;
-      trafficUp += node.trafficUp;
-      trafficDown += node.trafficDown;
+      trafficTotal += node.trafficTotal;
     }
 
     return {
       totalNodes: visibleNodes.length,
       onlineNodes,
       offlineNodes,
-      trafficUp,
-      trafficDown,
+      trafficTotal,
       netUp: sampledBandwidth.netUp,
       netDown: sampledBandwidth.netDown,
     };

@@ -74,7 +74,7 @@ function primaryValue(
     case "speed":
       return ctx.speedAvgByUuid.get(node.uuid) ?? 0;
     case "traffic":
-      return (node.trafficUp || 0) + (node.trafficDown || 0);
+      return node.trafficUsed;
     case "price":
       return ctx.priceByUuid.get(node.uuid) ?? 0;
     case "default":

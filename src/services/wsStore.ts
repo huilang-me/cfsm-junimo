@@ -12,6 +12,7 @@ import {
   parseGpuUtil,
   parseProbeMetricValue,
 } from "@/utils/cfsmProbeMetrics";
+import { computeTrafficUsed } from "@/utils/traffic";
 
 type Listener = () => void;
 type RealtimePayload = Record<string, unknown>;
@@ -36,6 +37,9 @@ export interface HomeNodeSummary {
   region: string;
   hidden: boolean;
   weight: number;
+  trafficCalcType: string;
+  trafficUsed: number;
+  trafficTotal: number;
   online: boolean | null;
   trafficUp: number;
   trafficDown: number;
@@ -123,7 +127,10 @@ function emptyMetrics(info: NodeInfo, online: boolean | null): NodeMetrics {
     netDown: 0,
     trafficUp: 0,
     trafficDown: 0,
+    trafficTotalUp: 0,
+    trafficTotalDown: 0,
     uptime: 0,
+    bootTime: 0,
     load1: 0,
     load5: 0,
     load15: 0,
@@ -195,7 +202,10 @@ function mergeRealtime(
     netDown: rt.network?.down ?? 0,
     trafficUp: metrics.trafficUp,
     trafficDown: metrics.trafficDown,
+    trafficTotalUp: rt.network?.lifetimeUp ?? metrics.trafficTotalUp,
+    trafficTotalDown: rt.network?.lifetimeDown ?? metrics.trafficTotalDown,
     uptime: rt.uptime ?? 0,
+    bootTime: rt.bootTime ?? metrics.bootTime,
     load1: rt.load?.load1 ?? 0,
     load5: rt.load?.load5 ?? 0,
     load15: rt.load?.load15 ?? 0,
@@ -238,7 +248,10 @@ function shallowEqualMetrics(a: NodeMetrics, b: NodeMetrics) {
     a.netDown === b.netDown &&
     a.trafficUp === b.trafficUp &&
     a.trafficDown === b.trafficDown &&
+    a.trafficTotalUp === b.trafficTotalUp &&
+    a.trafficTotalDown === b.trafficTotalDown &&
     a.uptime === b.uptime &&
+    a.bootTime === b.bootTime &&
     a.load1 === b.load1 &&
     a.load5 === b.load5 &&
     a.load15 === b.load15 &&
@@ -533,6 +546,23 @@ function pickNumber(payload: RealtimePayload, keys: string[], fallback = 0): num
   return fallback;
 }
 
+function pickOptionalNumber(payload: RealtimePayload, keys: string[]): number | undefined {
+  for (const key of keys) {
+    if (payload[key] != null) return asNumber(payload[key]);
+  }
+  return undefined;
+}
+
+function pickOptionalTimestamp(payload: RealtimePayload, keys: string[]): number | undefined {
+  for (const key of keys) {
+    if (payload[key] != null) {
+      const timestamp = toTimestamp(payload[key] as string | number | undefined);
+      return timestamp > 0 ? timestamp : undefined;
+    }
+  }
+  return undefined;
+}
+
 function metricBytes(value: unknown, fallback = 0): number {
   const number = asNumber(value, fallback);
   if (number <= 0) return 0;
@@ -683,12 +713,15 @@ function normalizeRealtime(
         down: asNumber(network.down),
         totalUp: asNumber(network.totalUp),
         totalDown: asNumber(network.totalDown),
+        lifetimeUp: pickOptionalNumber(network, ["lifetimeUp"]),
+        lifetimeDown: pickOptionalNumber(network, ["lifetimeDown"]),
       },
       connections: {
         tcp: asNumber(connections.tcp),
         udp: asNumber(connections.udp),
       },
       uptime: asNumber(payload.uptime),
+      bootTime: pickOptionalTimestamp(payload, ["boot_time", "bootTime"]),
       process: asNumber(payload.process),
       updated_at: (payload.updated_at ?? payload.time) as string | number | undefined,
       gpuUtil: Object.prototype.hasOwnProperty.call(payload, "gpu_info")
@@ -737,14 +770,17 @@ function normalizeRealtime(
     network: {
       up: pickNumber(payload, ["net_out_speed", "net_out"]),
       down: pickNumber(payload, ["net_in_speed", "net_in"]),
-      totalUp: pickNumber(payload, ["net_tx", "net_total_up", "net_tx_monthly"]),
-      totalDown: pickNumber(payload, ["net_rx", "net_total_down", "net_rx_monthly"]),
+      totalUp: pickNumber(payload, ["net_tx_monthly", "net_total_up", "net_tx"]),
+      totalDown: pickNumber(payload, ["net_rx_monthly", "net_total_down", "net_rx"]),
+      lifetimeUp: pickOptionalNumber(payload, ["net_tx", "net_lifetime_up", "net_total_lifetime_up"]),
+      lifetimeDown: pickOptionalNumber(payload, ["net_rx", "net_lifetime_down", "net_total_lifetime_down"]),
     },
     connections: {
       tcp: resolveFlatConnectionsTcp(payload),
       udp: pickNumber(payload, ["udp_conn", "connections_udp"]),
     },
     uptime: asNumber(payload.uptime),
+    bootTime: pickOptionalTimestamp(payload, ["boot_time", "bootTime"]),
     process: pickNumber(payload, ["processes", "process"]),
     updated_at: (payload.updated_at ?? payload.last_updated ?? payload.timestamp ?? payload.time) as
       | string
@@ -794,6 +830,9 @@ function applyLatestStatus(records: Record<string, unknown>) {
           ...mergedRealtime,
           trafficUp: asNumber(rawPayload.net_total_up, prev.trafficUp),
           trafficDown: asNumber(rawPayload.net_total_down, prev.trafficDown),
+          trafficTotalUp: asNumber(rawPayload.net_lifetime_up, prev.trafficTotalUp),
+          trafficTotalDown: asNumber(rawPayload.net_lifetime_down, prev.trafficTotalDown),
+          bootTime: toTimestamp(rawPayload.boot_time as string | number | undefined) || prev.bootTime,
         }
       : mergedRealtime;
 
@@ -1511,15 +1550,21 @@ export function getHomeNodeSummariesSnapshot(): HomeNodeSummary[] {
       const meta = state.metaByUuid[uuid];
       if (!meta) return null;
       const metrics = state.metricsByUuid[uuid];
+      const trafficUp = metrics?.trafficUp ?? 0;
+      const trafficDown = metrics?.trafficDown ?? 0;
+      const trafficTotal = (metrics?.trafficTotalUp ?? 0) + (metrics?.trafficTotalDown ?? 0);
       return {
         uuid,
         group: String(meta.group || "").trim(),
         region: String(meta.region || "").trim(),
         hidden: meta.hidden,
         weight: meta.weight,
+        trafficCalcType: meta.traffic_limit_type,
+        trafficUsed: computeTrafficUsed(meta.traffic_limit_type, trafficUp, trafficDown),
+        trafficTotal,
         online: metrics?.online ?? null,
-        trafficUp: metrics?.trafficUp ?? 0,
-        trafficDown: metrics?.trafficDown ?? 0,
+        trafficUp,
+        trafficDown,
         netUp: metrics?.netUp ?? 0,
         netDown: metrics?.netDown ?? 0,
       };
@@ -1537,6 +1582,9 @@ export function getHomeNodeSummariesSnapshot(): HomeNodeSummary[] {
         prev.region === item.region &&
         prev.hidden === item.hidden &&
         prev.weight === item.weight &&
+        prev.trafficCalcType === item.trafficCalcType &&
+        prev.trafficUsed === item.trafficUsed &&
+        prev.trafficTotal === item.trafficTotal &&
         prev.online === item.online &&
         prev.trafficUp === item.trafficUp &&
         prev.trafficDown === item.trafficDown &&

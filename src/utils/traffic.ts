@@ -1,4 +1,4 @@
-// 与后端 computeUsedByType 保持一致，空或未知类型按 max 处理。
+// 与 CFSM 的 traffic_calc_type 保持一致。兼容旧别名，空或未知类型按 max 处理。
 export interface TrafficDisplay {
   fraction: number;
   color: string;
@@ -12,7 +12,8 @@ function nonNegative(value: number): number {
 }
 
 /**
- * 按节点的 `traffic_limit_type` 从累计上/下行总量算出已用流量。默认(空/未知)为 "max",与后端一致。
+ * 按节点的 `traffic_calc_type` 从累计上/下行总量算出已用流量。
+ * 当前 API 取值为 ul/dl/total/max；旧版 up/down/sum/min 仍兼容。
  */
 export function computeTrafficUsed(
   type: string | null | undefined,
@@ -22,10 +23,13 @@ export function computeTrafficUsed(
   const safeUp = nonNegative(up);
   const safeDown = nonNegative(down);
   switch ((type ?? "").trim().toLowerCase()) {
+    case "ul":
     case "up":
       return safeUp;
+    case "dl":
     case "down":
       return safeDown;
+    case "total":
     case "sum":
       return safeUp + safeDown;
     case "min":
@@ -60,10 +64,13 @@ export function resolveTrafficUsage(
 
 export function trafficTypeLabel(type: string | null | undefined): string {
   switch ((type ?? "").trim().toLowerCase()) {
+    case "ul":
     case "up":
       return "仅上行";
+    case "dl":
     case "down":
       return "仅下行";
+    case "total":
     case "sum":
       return "上行+下行";
     case "min":

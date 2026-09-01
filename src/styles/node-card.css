@@ -163,9 +163,10 @@
 
 /* V4/V6 双栈标识药丸：仅字样（不显示真实 IP）。data-tag="green" 复用绿色标签的 token，与标签统一 */
 .ip-stack-badge {
-  display: inline-flex;
+  display: inline-grid;
   flex: 0 0 auto;
-  align-items: center;
+  align-self: center;
+  place-items: center;
   height: 22px;
   padding: 0 0.5rem;
   border-radius: 8px;
@@ -176,6 +177,7 @@
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.02em;
+  vertical-align: middle;
 }
 
 .server-card-stack {

@@ -6,8 +6,7 @@ import { speedRateColor } from "@/utils/metricTone";
 export interface OverviewCollapseData {
   totalNodes: number;
   onlineNodes: number;
-  trafficUp: number;
-  trafficDown: number;
+  trafficTotal: number;
   netUp: number;
   netDown: number;
 }
@@ -42,7 +41,7 @@ function formatCompactBytes(value: number): string {
 }
 
 /**
- * 顶部总览折叠条:单行精简显示核心数据(在线节点/实时带宽/累计流量),
+ * 顶部总览折叠条:单行精简显示核心数据(在线节点/实时带宽/开机以来总流量),
  * 右侧箭头点击展开/收起完整总览。折叠状态存 localStorage。
  */
 export function OverviewCollapseBar({
@@ -54,9 +53,7 @@ export function OverviewCollapseBar({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const trafficLabel = `↑${formatCompactBytes(data.trafficUp)} ↓${formatCompactBytes(
-    data.trafficDown,
-  )}`;
+  const trafficLabel = formatCompactBytes(data.trafficTotal);
   const rate = formatByteRate(data.netUp + data.netDown);
   const onlineLabel = `${data.onlineNodes}/${data.totalNodes}`;
 
@@ -80,7 +77,7 @@ export function OverviewCollapseBar({
         </span>
       </span>
       <span className="overview-collapse-stat" data-metric="traffic">
-        <span className="overview-collapse-label">累计流量</span>
+        <span className="overview-collapse-label">开机以来总流量</span>
         <span className="overview-collapse-value">{trafficLabel}</span>
       </span>
       <span className="overview-collapse-arrow" aria-hidden>
