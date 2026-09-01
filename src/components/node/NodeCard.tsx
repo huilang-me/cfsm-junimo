@@ -92,6 +92,7 @@ export const NodeCard = memo(function NodeCard({
     upRate,
     downRate,
     hasRealHomepagePingBinding,
+    shouldRenderHealthSection,
     shouldRenderPingBars,
     pingLoading,
     pingError,
@@ -159,24 +160,26 @@ export const NodeCard = memo(function NodeCard({
             </div>
           )}
 
-          {homepagePingLines.length === HOMEPAGE_MULTI_PING_TASK_COUNT ? (
-            <MultiPingStatus
-              lines={homepagePingLines}
-              density="large"
-              className="card-metric-section"
-            />
-          ) : (
-            <NodeHealthSection
-              ping={ping}
-              pingBuckets={pingBuckets}
-              redrawKey={redrawKey}
-              hasRealHomepagePingBinding={hasRealHomepagePingBinding}
-              shouldRenderPingBars={shouldRenderPingBars}
-              pingLoading={pingLoading}
-              pingError={pingError}
-              latencyColor={latencyColor}
-              lossColor={lossColor}
-            />
+          {shouldRenderHealthSection && (
+            homepagePingLines.length === HOMEPAGE_MULTI_PING_TASK_COUNT ? (
+              <MultiPingStatus
+                lines={homepagePingLines}
+                density="large"
+                className="card-metric-section"
+              />
+            ) : (
+              <NodeHealthSection
+                ping={ping}
+                pingBuckets={pingBuckets}
+                redrawKey={redrawKey}
+                hasRealHomepagePingBinding={hasRealHomepagePingBinding}
+                shouldRenderPingBars={shouldRenderPingBars}
+                pingLoading={pingLoading}
+                pingError={pingError}
+                latencyColor={latencyColor}
+                lossColor={lossColor}
+              />
+            )
           )}
         </div>
 

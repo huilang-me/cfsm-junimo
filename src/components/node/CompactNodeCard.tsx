@@ -703,6 +703,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
     lossColor,
     loadFraction,
     hasRealHomepagePingBinding,
+    shouldRenderHealthSection,
     pingLoading,
     pingError,
     osName,
@@ -747,22 +748,24 @@ export const CompactNodeCard = memo(function CompactNodeCard({
         renewalPrice={renewalPrice}
       />
       <CompactTrafficBar traffic={traffic} uptimeLabel={uptimeLabel} />
-      {homepagePingLines.length === HOMEPAGE_MULTI_PING_TASK_COUNT ? (
-        <MultiPingStatus
-          lines={homepagePingLines}
-          density="compact"
-          className="compact-node-bottom"
-        />
-      ) : (
-        <CompactNodeHealth
-          ping={ping}
-          pingBuckets={pingBuckets}
-          latencyColor={latencyColor}
-          lossColor={lossColor}
-          hasRealHomepagePingBinding={hasRealHomepagePingBinding}
-          pingLoading={pingLoading}
-          pingError={pingError}
-        />
+      {shouldRenderHealthSection && (
+        homepagePingLines.length === HOMEPAGE_MULTI_PING_TASK_COUNT ? (
+          <MultiPingStatus
+            lines={homepagePingLines}
+            density="compact"
+            className="compact-node-bottom"
+          />
+        ) : (
+          <CompactNodeHealth
+            ping={ping}
+            pingBuckets={pingBuckets}
+            latencyColor={latencyColor}
+            lossColor={lossColor}
+            hasRealHomepagePingBinding={hasRealHomepagePingBinding}
+            pingLoading={pingLoading}
+            pingError={pingError}
+          />
+        )
       )}
     </article>
   );

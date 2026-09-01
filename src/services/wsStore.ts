@@ -608,6 +608,7 @@ function readHomepageProbePoint(point: unknown, key: string) {
 }
 
 function buildHomepagePingLines(payload: RealtimePayload, uuid: string): HomepagePingLine[] | undefined {
+  if (Array.isArray(payload.ping) && payload.ping.length === 0) return [];
   const pingPoints = Array.isArray(payload.ping) ? payload.ping : [];
   const lossPoints = Array.isArray(payload.loss) ? payload.loss : [];
   const pointCount = Math.max(pingPoints.length, lossPoints.length);

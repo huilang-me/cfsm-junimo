@@ -64,6 +64,7 @@ export function useNodeCardModel(
   } = useThemeSettings();
   const multiPingActive = includeMultiPing;
   const realPing = useNodePingOverview(uuid, !multiPingActive && !includeCtPing);
+  const hasHomepagePingSnapshot = Array.isArray(metrics?.homepagePingLines);
   const realPingLines = metrics?.homepagePingLines ?? EMPTY_HOMEPAGE_PING_LINES;
   const hasRealHomepagePingBinding = useMemo(
     () =>
@@ -101,6 +102,9 @@ export function useNodeCardModel(
     ) {
       return [];
     }
+    if (hasHomepagePingSnapshot && realPingLines.length === 0) {
+      return [];
+    }
     // CFSM 的 /api/servers 固定返回 ct/cu/cm；首页三网展示也固定为这三条。
     const taskIds = CFSM_HOMEPAGE_MULTI_PING_TASK_IDS;
     return taskIds.map((taskId) => {
@@ -124,11 +128,17 @@ export function useNodeCardModel(
     });
   }, [
     bucketNow,
+    hasHomepagePingSnapshot,
     multiPingActive,
     pingBucketCount,
     realPingLines,
     uuid,
   ]);
+  const shouldRenderHealthSection = !(
+    multiPingActive &&
+    hasHomepagePingSnapshot &&
+    realPingLines.length === 0
+  );
   const ctPing = useMemo<PingOverviewItem | null>(() => {
     if (!includeCtPing || !metrics) return null;
     const ctLine = realPingLines.find((line) => line.taskId === 1);
@@ -262,6 +272,7 @@ export function useNodeCardModel(
         homepagePingLines,
         ctPing,
         ctPingBuckets,
+        shouldRenderHealthSection,
       };
     }
 
@@ -300,6 +311,7 @@ export function useNodeCardModel(
       homepagePingLines,
       ctPing,
       ctPingBuckets,
+      shouldRenderHealthSection,
       traffic,
       ...metaModel,
       ...(includeCtPing ? displayPingModel : pingModel),
@@ -325,6 +337,7 @@ export function useNodeCardModel(
     pingModel,
     ping,
     pingBuckets,
+    shouldRenderHealthSection,
     trafficTrend,
   ]);
 }
