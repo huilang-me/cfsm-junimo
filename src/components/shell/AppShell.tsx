@@ -18,8 +18,7 @@ export function AppShell() {
   const auth = useAuth();
   const normalizedPath = (pathname.replace(/\/+$/, "") || "/").toLowerCase();
   const isDataRoute =
-    normalizedPath === "/" ||
-    normalizedPath.startsWith("/server/");
+    normalizedPath === "/" || normalizedPath.startsWith("/server/");
   const isCheckingAccess =
     isDataRoute &&
     (publicConfig.isPending ||
@@ -31,12 +30,15 @@ export function AppShell() {
     !auth.isPending &&
     auth.data?.logged_in !== true;
   const isHomeDashboard =
-    normalizedPath === "/" && new URLSearchParams(search).get("view") !== "theme-manage";
+    normalizedPath === "/" &&
+    new URLSearchParams(search).get("view") !== "theme-manage";
   const canHydrateHome =
     isHomeDashboard && !isCheckingAccess && !accessError && !isPrivateVisitor;
   const homeStoreStatus = useNodeStoreStatus(canHydrateHome);
   const isCheckingHomeData =
-    canHydrateHome && !homeStoreStatus.hydrated && !homeStoreStatus.nodeInfoError;
+    canHydrateHome &&
+    !homeStoreStatus.hydrated &&
+    !homeStoreStatus.nodeInfoError;
   const isCheckingShell = isCheckingAccess || isCheckingHomeData;
   const cfsmVersion = publicConfig.data?.version?.trim();
   return (
@@ -70,7 +72,7 @@ export function AppShell() {
             CF-Server-Monitor
           </a>
           <span className="app-powered-separator"> · </span>
-          theme by{" "}
+          Theme by{" "}
           <a
             href="https://github.com/huilang-me/cfsm-junimo/"
             target="_blank"
@@ -92,9 +94,15 @@ function AccessError({ onRetry }: { onRetry: () => void }) {
         <div className="text-[15px] font-semibold text-[var(--text-primary)]">
           无法读取站点配置
         </div>
-        <p className="text-[13px] text-[var(--text-secondary)]">请检查网络后重试。</p>
+        <p className="text-[13px] text-[var(--text-secondary)]">
+          请检查网络后重试。
+        </p>
       </div>
-      <button type="button" onClick={onRetry} className="control-button px-4 py-2 text-[13px] font-medium">
+      <button
+        type="button"
+        onClick={onRetry}
+        className="control-button px-4 py-2 text-[13px] font-medium"
+      >
         重试
       </button>
     </div>
@@ -108,7 +116,9 @@ function PrivateSiteGate() {
         <Lock size={22} strokeWidth={2} />
       </div>
       <div className="space-y-2">
-        <div className="text-[15px] font-semibold text-[var(--text-primary)]">站点已设为私有</div>
+        <div className="text-[15px] font-semibold text-[var(--text-primary)]">
+          站点已设为私有
+        </div>
         <p className="max-w-[32rem] text-[13px] text-[var(--text-secondary)]">
           登录后即可查看节点数据。
         </p>

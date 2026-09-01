@@ -165,7 +165,7 @@ body::after {
   display: inline;
   max-width: 100%;
   overflow-wrap: anywhere;
-  color: var(--text-primary);
+  color: var(--text-on-strong);
   font-size: 12px;
   font-weight: 560;
   line-height: 1.5;
@@ -178,7 +178,7 @@ body::after {
 }
 
 .app-powered-link:hover {
-  color: var(--text-secondary);
+  text-decoration: underline;
 }
 
 .app-powered-separator {
