@@ -17,7 +17,7 @@ import type {
   PingTaskStats,
 } from "@/types/cfsm";
 import { withTimeoutSignal } from "@/utils/abort";
-import { getCfsmProbeName } from "@/utils/cfsmProbeMetrics";
+import { getCfsmProbeName, getConfiguredCfsmProbeName } from "@/utils/cfsmProbeMetrics";
 import { resolvePingSampleCounts } from "@/utils/pingMetrics";
 import {
   hasUsableHomepageMultiPingGroups,
@@ -521,7 +521,7 @@ export async function buildPingOverviewMap(
     const next = successfulTaskIds.has(taskId)
       ? {
           taskId,
-          taskName: taskNames.get(taskId) ?? current.taskName ?? getCfsmProbeName(taskId),
+          taskName: getConfiguredCfsmProbeName(taskId) ?? taskNames.get(taskId) ?? current.taskName ?? getCfsmProbeName(taskId),
           ...(itemsByTask.get(taskId)?.get(uuid) ?? assignedEmptyPing(uuid, "ready")),
           loadState: "ready" as const,
         }
@@ -579,8 +579,9 @@ export async function buildPingOverviewMap(
       batchedStats,
     );
     const taskName =
-      tasks.find((task) => task.id === taskId)?.name ||
-      effectiveStats.find((stat) => stat.taskId === taskId)?.name;
+      getConfiguredCfsmProbeName(taskId) ??
+      (tasks.find((task) => task.id === taskId)?.name ||
+        effectiveStats.find((stat) => stat.taskId === taskId)?.name);
     if (taskName) taskNames.set(taskId, taskName);
     itemsByTask.set(
       taskId,

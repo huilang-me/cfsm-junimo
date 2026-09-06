@@ -9,6 +9,7 @@ import {
 } from "@/services/api";
 import {
   HOMEPAGE_CFSM_PROBE_DEFS,
+  getCfsmProbeName,
   parseGpuUtil,
   parseProbeMetricValue,
 } from "@/utils/cfsmProbeMetrics";
@@ -648,7 +649,7 @@ function buildHomepagePingLines(payload: RealtimePayload, uuid: string): Homepag
 
     return {
       taskId: def.id,
-      taskName: def.name,
+      taskName: getCfsmProbeName(def.id),
       client: uuid,
       isAssigned: true,
       loadState: "ready",

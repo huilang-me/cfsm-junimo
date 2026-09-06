@@ -13,7 +13,9 @@ import {
   CFSM_PROBE_DEFS,
   HOMEPAGE_CFSM_PROBE_DEFS,
   clampLossPercent,
+  getCfsmProbeName,
   parseProbeMetricValue,
+  setCfsmProbeNames,
 } from "@/utils/cfsmProbeMetrics";
 import { getApiBases } from "@/utils/apiBase";
 
@@ -479,6 +481,13 @@ export function mapConfigToMe(config: Record<string, unknown>): Me {
 }
 
 export function mapConfigToPublic(data: Record<string, unknown>): PublicConfig {
+  const customProbeNames = {
+    custom_ct_name: asString(data.custom_ct_name),
+    custom_cu_name: asString(data.custom_cu_name),
+    custom_cm_name: asString(data.custom_cm_name),
+    custom_bd_name: asString(data.custom_bd_name),
+  };
+  setCfsmProbeNames(customProbeNames);
   const themeOptions = asRecord(data.theme_options);
   const themeSettings = {
     ...cfsmThemeDefaults(),
@@ -501,6 +510,7 @@ export function mapConfigToPublic(data: Record<string, unknown>): PublicConfig {
     record_preserve_time: 168,
     ping_record_preserve_time: 0,
     metric_retention_days: asNumber(asRecord(data.long_history_config).days),
+    ...customProbeNames,
     custom_head: "",
     custom_body: "",
     theme_settings: themeSettings,
@@ -611,7 +621,7 @@ function getCfsmProbeTask(taskId: number): PingTask | null {
   return {
     id: def.id,
     interval: 60,
-    name: def.name,
+    name: getCfsmProbeName(def.id),
     loss: 0,
     clients: [],
     type: def.type,
@@ -810,6 +820,7 @@ function readHistoryProbeMetric(
     field,
     compactKey,
     def.name,
+    getCfsmProbeName(def.id),
     def.pingField,
     def.lossField,
   ];

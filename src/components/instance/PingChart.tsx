@@ -24,7 +24,7 @@ import { latencyHeatColor, lossHeatColor } from "@/utils/metricTone";
 import { historyCoverageLabel } from "@/utils/historyRange";
 import { resolvePingChartInterval, resolvePingSampleCounts } from "@/utils/pingMetrics";
 import { useNodeMetrics } from "@/hooks/useNode";
-import { CFSM_PROBE_DEFS, clampLossPercent } from "@/utils/cfsmProbeMetrics";
+import { CFSM_PROBE_DEFS, clampLossPercent, getCfsmProbeName } from "@/utils/cfsmProbeMetrics";
 import type { NodeMetrics, PingRecord, PingRecordsResponse, PingTask, PingTaskStats } from "@/types/cfsm";
 import type { TimedMetricPoint } from "./chartData";
 
@@ -412,7 +412,7 @@ export function PingChart({
       .map((def) => ({
         id: def.id,
         interval: 60,
-        name: def.name,
+        name: getCfsmProbeName(def.id),
         loss: 0,
         clients: [uuid],
         type: def.type,

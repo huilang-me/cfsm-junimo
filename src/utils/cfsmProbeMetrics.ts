@@ -41,12 +41,41 @@ export const CFSM_PROBE_DEFS = [
   },
 ] as const;
 
+const DEFAULT_CFSM_PROBE_NAMES = Object.fromEntries(
+  CFSM_PROBE_DEFS.map((def) => [def.id, def.name]),
+) as Record<number, string>;
+let customCfsmProbeNames: Partial<Record<number, string>> = {};
+
+/** Apply names returned by /api/config; empty/missing values keep legacy names. */
+export function setCfsmProbeNames(names: {
+  custom_ct_name?: unknown;
+  custom_cu_name?: unknown;
+  custom_cm_name?: unknown;
+  custom_bd_name?: unknown;
+}) {
+  const entries: Array<[number, unknown]> = [
+    [1, names.custom_ct_name],
+    [2, names.custom_cu_name],
+    [3, names.custom_cm_name],
+    [4, names.custom_bd_name],
+  ];
+  customCfsmProbeNames = Object.fromEntries(
+    entries
+      .map(([id, value]) => [id, typeof value === "string" ? value.trim() : ""] as const)
+      .filter(([, value]) => value.length > 0),
+  );
+}
+
+export function getConfiguredCfsmProbeName(taskId: number) {
+  return customCfsmProbeNames[taskId];
+}
+
 export const HOMEPAGE_CFSM_PROBE_DEFS = CFSM_PROBE_DEFS.filter(
   (def) => def.id === 1 || def.id === 2 || def.id === 3,
 );
 
 export function getCfsmProbeName(taskId: number) {
-  return CFSM_PROBE_DEFS.find((def) => def.id === taskId)?.name ?? `任务 #${taskId}`;
+  return customCfsmProbeNames[taskId] ?? DEFAULT_CFSM_PROBE_NAMES[taskId] ?? `任务 #${taskId}`;
 }
 
 export function isDisabledProbeMetric(value: unknown) {
