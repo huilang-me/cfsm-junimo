@@ -62,12 +62,20 @@ export function setCfsmProbeNames(names: {
   custom_cu_name?: unknown;
   custom_cm_name?: unknown;
   custom_bd_name?: unknown;
+  node_1_name?: unknown;
+  node_2_name?: unknown;
+  node_3_name?: unknown;
+  node_4_name?: unknown;
 }) {
   const entries: Array<[number, unknown]> = [
     [1, names.custom_ct_name],
     [2, names.custom_cu_name],
     [3, names.custom_cm_name],
     [4, names.custom_bd_name],
+    [5, names.node_1_name],
+    [6, names.node_2_name],
+    [7, names.node_3_name],
+    [8, names.node_4_name],
   ];
   customCfsmProbeNames = Object.fromEntries(
     entries

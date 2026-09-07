@@ -486,6 +486,10 @@ export function mapConfigToPublic(data: Record<string, unknown>): PublicConfig {
     custom_cu_name: asString(data.custom_cu_name),
     custom_cm_name: asString(data.custom_cm_name),
     custom_bd_name: asString(data.custom_bd_name),
+    node_1_name: asString(data.node_1_name),
+    node_2_name: asString(data.node_2_name),
+    node_3_name: asString(data.node_3_name),
+    node_4_name: asString(data.node_4_name),
   };
   setCfsmProbeNames(customProbeNames);
   const themeOptions = asRecord(data.theme_options);
