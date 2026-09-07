@@ -115,9 +115,10 @@ const SMOOTH_WINDOW_POINTS_PEAK = 13;
 
 function realtimeRecordsFromNode(node: NodeMetrics, uuid: string): PingRecord[] {
   const time = node.updatedAt > 0 ? node.updatedAt : Date.now();
+  const metricValues = node as unknown as Record<string, number | null | undefined>;
   return CFSM_PROBE_DEFS.flatMap((def) => {
-    const latency = node[def.metricsPingKey];
-    const loss = node[def.metricsLossKey];
+    const latency = metricValues[def.metricsPingKey];
+    const loss = metricValues[def.metricsLossKey];
     if (latency == null && loss == null) return [];
     return [{
       task_id: def.id,

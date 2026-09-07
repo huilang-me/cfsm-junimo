@@ -154,6 +154,8 @@ function emptyMetrics(info: NodeInfo, online: boolean | null): NodeMetrics {
     lossCu: null,
     lossCm: null,
     lossBd: null,
+    pingNode1: null, pingNode2: null, pingNode3: null, pingNode4: null,
+    lossNode1: null, lossNode2: null, lossNode3: null, lossNode4: null,
   };
 }
 
@@ -229,6 +231,14 @@ function mergeRealtime(
     lossCu: rt.lossCu !== undefined ? rt.lossCu : metrics.lossCu,
     lossCm: rt.lossCm !== undefined ? rt.lossCm : metrics.lossCm,
     lossBd: rt.lossBd !== undefined ? rt.lossBd : metrics.lossBd,
+    pingNode1: rt.pingNode1 !== undefined ? rt.pingNode1 : metrics.pingNode1,
+    pingNode2: rt.pingNode2 !== undefined ? rt.pingNode2 : metrics.pingNode2,
+    pingNode3: rt.pingNode3 !== undefined ? rt.pingNode3 : metrics.pingNode3,
+    pingNode4: rt.pingNode4 !== undefined ? rt.pingNode4 : metrics.pingNode4,
+    lossNode1: rt.lossNode1 !== undefined ? rt.lossNode1 : metrics.lossNode1,
+    lossNode2: rt.lossNode2 !== undefined ? rt.lossNode2 : metrics.lossNode2,
+    lossNode3: rt.lossNode3 !== undefined ? rt.lossNode3 : metrics.lossNode3,
+    lossNode4: rt.lossNode4 !== undefined ? rt.lossNode4 : metrics.lossNode4,
     homepagePingLines: rt.homepagePingLines !== undefined ? rt.homepagePingLines : metrics.homepagePingLines,
   };
 }
@@ -275,6 +285,14 @@ function shallowEqualMetrics(a: NodeMetrics, b: NodeMetrics) {
     a.lossCu === b.lossCu &&
     a.lossCm === b.lossCm &&
     a.lossBd === b.lossBd &&
+    a.pingNode1 === b.pingNode1 &&
+    a.pingNode2 === b.pingNode2 &&
+    a.pingNode3 === b.pingNode3 &&
+    a.pingNode4 === b.pingNode4 &&
+    a.lossNode1 === b.lossNode1 &&
+    a.lossNode2 === b.lossNode2 &&
+    a.lossNode3 === b.lossNode3 &&
+    a.lossNode4 === b.lossNode4 &&
     a.homepagePingLines === b.homepagePingLines
   );
 }
@@ -743,6 +761,8 @@ function normalizeRealtime(
       lossCu: pickProbeMetric(payload, "loss_cu"),
       lossCm: pickProbeMetric(payload, "loss_cm"),
       lossBd: pickProbeMetric(payload, "loss_bd"),
+      pingNode1: pickProbeMetric(payload, "ping_node_1"), pingNode2: pickProbeMetric(payload, "ping_node_2"), pingNode3: pickProbeMetric(payload, "ping_node_3"), pingNode4: pickProbeMetric(payload, "ping_node_4"),
+      lossNode1: pickProbeMetric(payload, "loss_node_1"), lossNode2: pickProbeMetric(payload, "loss_node_2"), lossNode3: pickProbeMetric(payload, "loss_node_3"), lossNode4: pickProbeMetric(payload, "loss_node_4"),
       homepagePingLines,
     };
   }
@@ -805,6 +825,8 @@ function normalizeRealtime(
     lossCu: pickProbeMetric(payload, "loss_cu"),
     lossCm: pickProbeMetric(payload, "loss_cm"),
     lossBd: pickProbeMetric(payload, "loss_bd"),
+    pingNode1: pickProbeMetric(payload, "ping_node_1"), pingNode2: pickProbeMetric(payload, "ping_node_2"), pingNode3: pickProbeMetric(payload, "ping_node_3"), pingNode4: pickProbeMetric(payload, "ping_node_4"),
+    lossNode1: pickProbeMetric(payload, "loss_node_1"), lossNode2: pickProbeMetric(payload, "loss_node_2"), lossNode3: pickProbeMetric(payload, "loss_node_3"), lossNode4: pickProbeMetric(payload, "loss_node_4"),
     homepagePingLines,
   };
 }

@@ -39,6 +39,16 @@ export const CFSM_PROBE_DEFS = [
     metricsPingKey: "pingBd",
     metricsLossKey: "lossBd",
   },
+  ...([1, 2, 3, 4] as const).map((node) => ({
+    id: 4 + node,
+    name: `Node ${node}`,
+    type: `node_${node}`,
+    windowKey: `node_${node}`,
+    pingField: `ping_node_${node}`,
+    lossField: `loss_node_${node}`,
+    metricsPingKey: `pingNode${node}`,
+    metricsLossKey: `lossNode${node}`,
+  })),
 ] as const;
 
 const DEFAULT_CFSM_PROBE_NAMES = Object.fromEntries(

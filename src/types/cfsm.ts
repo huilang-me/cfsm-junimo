@@ -104,6 +104,8 @@ export interface NodeRealtime {
   lossCu?: number | null;
   lossCm?: number | null;
   lossBd?: number | null;
+  pingNode1?: number | null; pingNode2?: number | null; pingNode3?: number | null; pingNode4?: number | null;
+  lossNode1?: number | null; lossNode2?: number | null; lossNode3?: number | null; lossNode4?: number | null;
   homepagePingLines?: HomepagePingLine[];
 }
 
@@ -149,6 +151,8 @@ export interface NodeMetrics {
   lossCu: number | null;
   lossCm: number | null;
   lossBd: number | null;
+  pingNode1: number | null; pingNode2: number | null; pingNode3: number | null; pingNode4: number | null;
+  lossNode1: number | null; lossNode2: number | null; lossNode3: number | null; lossNode4: number | null;
   homepagePingLines?: HomepagePingLine[];
 }
 
