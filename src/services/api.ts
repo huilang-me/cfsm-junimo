@@ -18,12 +18,17 @@ import {
   setCfsmProbeNames,
 } from "@/utils/cfsmProbeMetrics";
 import { getApiBases } from "@/utils/apiBase";
+import {
+  TURNSTILE_INVALID_EVENT,
+  TURNSTILE_TOKEN_KEY,
+  TURNSTILE_VERIFIED_KEY,
+  storeTurnstileVerified,
+} from "@/utils/turnstile";
 
 export { getApiBases } from "@/utils/apiBase";
 
 const DEFAULT_API_TIMEOUT_MS = 12_000;
 const ONLINE_THRESHOLD_MS = 5 * 60 * 1000;
-const TURNSTILE_VERIFIED_KEY = "turnstile_verified";
 const HOMEPAGE_LATENCY_WINDOW_POINTS = 20;
 const HOMEPAGE_LATENCY_WINDOW_HOURS = 2;
 const baseIndexByUuid = new Map<string, number>();
@@ -116,7 +121,7 @@ function buildHeaders(options: CfsmRequestOptions = {}) {
   }
 
   if (includeTurnstile) {
-    const turnstileToken = localStorage.getItem("turnstile_token");
+    const turnstileToken = localStorage.getItem(TURNSTILE_TOKEN_KEY);
     const turnstileVerified = localStorage.getItem(TURNSTILE_VERIFIED_KEY);
     if (turnstileToken) headers["X-Turnstile-Token"] = turnstileToken;
     if (turnstileVerified) headers["X-Turnstile-Verified"] = turnstileVerified;
@@ -161,8 +166,10 @@ async function requestJson<T>(
       if (options.autoRedirect !== false) redirectToAdmin();
     }
     if (response.status === 403) {
-      localStorage.removeItem("turnstile_token");
+      localStorage.removeItem(TURNSTILE_TOKEN_KEY);
       localStorage.removeItem(TURNSTILE_VERIFIED_KEY);
+      // 通知主题级验证门：本地 Turnstile 凭证已失效，需要重新出验证码
+      window.dispatchEvent(new Event(TURNSTILE_INVALID_EVENT));
     }
     if (!response.ok) {
       let message = `Request ${path} failed: ${response.status}`;
@@ -523,6 +530,20 @@ export function mapConfigToPublic(data: Record<string, unknown>): PublicConfig {
 
 export async function getMe(options?: ApiCallOptions): Promise<Me> {
   return mapConfigToMe(await getConfig(options));
+}
+
+// 用一次性 Turnstile token 调 /api/config 完成 siteverify，
+// 换取加密的 turnstile_verified 串（有效期 1 小时）存入 localStorage。
+export async function exchangeTurnstileVerification(): Promise<boolean> {
+  const { data } = await requestJson<Record<string, unknown>>("/api/config", {
+    includeTurnstile: true,
+    autoRedirect: false,
+  });
+  const verified = data.verified === true;
+  if (verified && data.turnstile_verified) {
+    storeTurnstileVerified(String(data.turnstile_verified));
+  }
+  return verified;
 }
 
 export async function getPublic(options?: ApiCallOptions): Promise<PublicConfig> {

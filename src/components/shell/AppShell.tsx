@@ -1,6 +1,7 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { Lock } from "lucide-react";
 import { BackgroundLayer } from "./BackgroundLayer";
+import { TurnstileGatePanel, useTurnstileGate } from "./TurnstileGate";
 import { Spinner } from "@/components/ui/Spinner";
 import { useAppearance } from "@/hooks/useAppearance";
 import { useAuth } from "@/hooks/useAuth";
@@ -19,6 +20,8 @@ export function AppShell() {
   const normalizedPath = (pathname.replace(/\/+$/, "") || "/").toLowerCase();
   const isDataRoute =
     normalizedPath === "/" || normalizedPath.startsWith("/server/");
+  const turnstileGate = useTurnstileGate();
+  const turnstileBlocked = isDataRoute && turnstileGate.blocked;
   const isCheckingAccess =
     isDataRoute &&
     (publicConfig.isPending ||
@@ -33,7 +36,11 @@ export function AppShell() {
     normalizedPath === "/" &&
     new URLSearchParams(search).get("view") !== "theme-manage";
   const canHydrateHome =
-    isHomeDashboard && !isCheckingAccess && !accessError && !isPrivateVisitor;
+    isHomeDashboard &&
+    !isCheckingAccess &&
+    !accessError &&
+    !isPrivateVisitor &&
+    !turnstileBlocked;
   const homeStoreStatus = useNodeStoreStatus(canHydrateHome);
   const isCheckingHomeData =
     canHydrateHome &&
@@ -46,7 +53,9 @@ export function AppShell() {
       <BackgroundLayer />
       <main className="app-main flex-1 px-3 pb-8 sm:px-5 md:px-6 lg:px-8">
         <div className="mx-auto w-full max-w-[1720px]">
-          {isCheckingShell ? (
+          {turnstileBlocked ? (
+            <TurnstileGatePanel gate={turnstileGate} />
+          ) : isCheckingShell ? (
             <div className="flex min-h-[60vh] items-center justify-center">
               <Spinner size={24} />
             </div>
